@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
   Bell,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
+  ExternalLink,
+  HelpCircle,
+  KeyRound,
   Mail,
-  MessageSquare,
   Phone,
+  Radio,
   Send,
-  ShieldAlert,
+  ShieldCheck,
   Smartphone,
   Sparkles,
   Users,
@@ -26,9 +28,11 @@ import { useLanguage } from "@/lib/i18n";
 import {
   getNotificationSettings,
   saveNotificationSettings,
-  sendSmsInBackground,
-  sendEmailInBackground,
+  sendSmsReal,
+  sendEmailReal,
   type NotificationSettings as NotificationSettingsType,
+  type SmsProvider,
+  type EmailProvider,
 } from "@/lib/notifications";
 
 export function NotificationSettings({ profile }: { profile: Profile }) {
@@ -38,11 +42,13 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
 
   const { data: contacts = [] } = useTrustedContacts(profile.id);
 
-  // Settings from localStorage / client config
   const [settings, setSettings] = useState<NotificationSettingsType>(getNotificationSettings);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    sms?: { success: boolean; text: string };
+    email?: { success: boolean; text: string };
+  } | null>(null);
 
-  // Profile phone & email
   const [phone, setPhone] = useState(profile.phone || "");
   const [email, setEmail] = useState(profile.email || "");
 
@@ -76,7 +82,10 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
     setSettings(updated);
   }
 
-  function handleTestAlert() {
+  async function handleTestRealDelivery() {
+    setTesting(true);
+    setTestResult(null);
+
     const primaryContact = contacts.find((c) => c.is_primary) || contacts[0];
     const targetPhone = primaryContact?.phone || phone;
     const targetEmail = primaryContact?.email || email;
@@ -84,40 +93,56 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
     if (!targetPhone && !targetEmail) {
       toast.error(
         isTamil
-          ? "சோதனை செய்ய ஒரு தொலைபேசி எண் அல்லது மின்னஞ்சல் முகவரியைச் சேர்க்கவும்"
-          : "Please add a phone number or email address to test notifications",
+          ? "சோதனை செய்ய பாதுகாவலரின் தொலைபேசி எண் அல்லது மின்னஞ்சலை சேர்க்கவும்"
+          : "Please add a caregiver's phone number or email to test delivery",
       );
+      setTesting(false);
       return;
     }
 
     const testMsg = isTamil
-      ? "🚨 VoxSign சோதனை அறிவிப்பு: உங்கள் SMS மற்றும் மின்னஞ்சல் எச்சரிக்கைகள் சரியாக வேலை செய்கின்றன!"
-      : "🚨 VoxSign Test Alert: Your SMS & Email notifications are working properly!";
+      ? "🚨 VoxSign சோதனை அறிவிப்பு: உங்கள் அவசர எச்சரிக்கை அமைப்பு வெற்றிகரமாக இணைக்கப்பட்டுள்ளது!"
+      : "🚨 VoxSign Test Alert: Your emergency alert delivery is verified and working!";
 
-    // Automatically send SMS in background if phone available & SMS enabled
+    const results: {
+      sms?: { success: boolean; text: string };
+      email?: { success: boolean; text: string };
+    } = {};
+
+    // 1. Test SMS
     if (settings.smsEnabled && targetPhone) {
-      void sendSmsInBackground(targetPhone, testMsg);
+      const res = await sendSmsReal(targetPhone, testMsg);
+      results.sms = { success: res.success, text: `[${res.provider}] ${res.statusText}` };
+      if (res.success) {
+        toast.success(`SMS: ${res.statusText}`);
+      } else {
+        toast.warning(`SMS: ${res.statusText}`);
+      }
     }
 
-    // Automatically send Email in background if email available & Email enabled
+    // 2. Test Email
     if (settings.emailEnabled && targetEmail) {
-      void sendEmailInBackground(
+      const res = await sendEmailReal(
         targetEmail,
-        isTamil ? "🚨 VoxSign சோதனை அவசர எச்சரிக்கை" : "🚨 VoxSign Test Emergency Alert",
+        isTamil ? "🚨 VoxSign சோதனை எச்சரிக்கை" : "🚨 VoxSign Emergency Test Alert",
         testMsg,
+        profile.full_name || "Sender",
       );
+      results.email = { success: res.success, text: `[${res.provider}] ${res.statusText}` };
+      if (res.success) {
+        toast.success(`Email: ${res.statusText}`);
+      } else {
+        toast.warning(`Email: ${res.statusText}`);
+      }
     }
 
-    toast.success(
-      isTamil
-        ? "சோதனை SMS & மின்னஞ்சல் அறிவிப்புகள் தானாகவே பின்னணியில் அனுப்பப்பட்டன!"
-        : "Test SMS & Email notifications sent automatically in the background!",
-    );
+    setTestResult(results);
+    setTesting(false);
   }
 
   return (
     <section className="surface-card p-6 space-y-6">
-      {/* Title & Header */}
+      {/* Title */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -125,156 +150,401 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
           </div>
           <div>
             <h2 className="text-base font-semibold">
-              {isTamil ? "SMS & மின்னஞ்சல் அறிவிப்புகள்" : "SMS & Email Notifications"}
+              {isTamil ? "SMS & மின்னஞ்சல் நேரலை டெலிவரி" : "Real SMS & Email Notification Delivery"}
             </h2>
             <p className="text-xs text-muted-foreground">
               {isTamil
-                ? "அவசர சைகைகள் மற்றும் நிலை அறிவிப்புகளுக்கான தானியங்கி எச்சரிக்கைகள்"
-                : "Automated alert dispatch for emergency gestures and status updates"}
+                ? "உண்மையான தொலைபேசி எண்கள் மற்றும் இன்பாக்ஸ்களுக்கு நேரடி அறிவிப்பு அமைப்புகள்"
+                : "Configure real live delivery to caregiver mobile phones and inboxes"}
             </p>
           </div>
         </div>
 
-        <Button size="sm" variant="outline" onClick={handleTestAlert} className="cursor-pointer">
-          <Sparkles className="h-4 w-4 mr-1 text-primary" />
-          {isTamil ? "சோதனை அறிவிப்பு அனுப்பு" : "Test Notifications"}
+        <Button
+          size="sm"
+          variant="default"
+          onClick={handleTestRealDelivery}
+          disabled={testing}
+          className="cursor-pointer font-semibold shadow-sm"
+        >
+          <Sparkles className="h-4 w-4 mr-1.5" />
+          {testing
+            ? isTamil
+              ? "சோதிக்கப்படுகிறது..."
+              : "Testing Delivery..."
+            : isTamil
+              ? "நேரலை டெலிவரி சோதனை"
+              : "Test Live Delivery"}
         </Button>
       </div>
 
-      {/* Main Alert Channels (SMS & Email) */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* SMS Channel Card */}
-        <div className="rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Smartphone className="h-4 w-4" />
+      {/* Test Results Banner */}
+      {testResult && (
+        <div className="rounded-xl border border-border bg-secondary/50 p-4 space-y-2 animate-in fade-in duration-200">
+          <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Radio className="h-3.5 w-3.5 text-primary animate-pulse" />
+            {isTamil ? "டெலிவரி சோதனை முடிவுகள்:" : "Live Delivery Test Results:"}
+          </p>
+          {testResult.sms && (
+            <div className="flex items-start gap-2 text-xs">
+              <span className="font-semibold text-foreground">SMS:</span>
+              <span
+                className={
+                  testResult.sms.success ? "text-success font-medium" : "text-warning font-medium"
+                }
+              >
+                {testResult.sms.text}
               </span>
-              <div>
-                <p className="text-sm font-bold text-foreground">
-                  {isTamil ? "SMS அறிவிப்புகள்" : "SMS Notifications"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {isTamil ? "மொபைல் SMS வழியாக உடனடி செய்தி" : "Instant SMS text message alerts"}
-                </p>
-              </div>
             </div>
-            <Switch
-              checked={settings.smsEnabled}
-              onCheckedChange={(val) => {
-                updateSetting("smsEnabled", val);
-                toast.success(
-                  val
-                    ? isTamil
-                      ? "SMS அறிவிப்புகள் இயக்கப்பட்டன"
-                      : "SMS notifications enabled"
-                    : isTamil
-                      ? "SMS அறிவிப்புகள் முடக்கப்பட்டன"
-                      : "SMS notifications disabled",
-                );
-              }}
-            />
-          </div>
+          )}
+          {testResult.email && (
+            <div className="flex items-start gap-2 text-xs">
+              <span className="font-semibold text-foreground">Email:</span>
+              <span
+                className={
+                  testResult.email.success ? "text-info font-medium" : "text-warning font-medium"
+                }
+              >
+                {testResult.email.text}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2 text-xs">
-            <span className="text-muted-foreground">
-              {isTamil ? "சேவை நிலை:" : "Channel status:"}
+      {/* 1. SMS Delivery Gateway Configuration */}
+      <div className="rounded-2xl border border-border p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Smartphone className="h-4 w-4" />
             </span>
-            <span
-              className={`flex items-center gap-1 font-semibold ${
-                settings.smsEnabled ? "text-success" : "text-muted-foreground"
-              }`}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {settings.smsEnabled
-                ? isTamil
-                  ? "செயலில் உள்ளது"
-                  : "Active & Ready"
-                : isTamil
-                  ? "முடக்கப்பட்டது"
-                  : "Disabled"}
-            </span>
+            <div>
+              <p className="text-sm font-bold text-foreground">
+                {isTamil ? "1. SMS டெலிவரி சேவை (SMS Gateway)" : "1. SMS Delivery Gateway"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isTamil
+                  ? "பாதுகாவலர்களின் மொபைல் எண்களுக்கு SMS அனுப்பும் முறையைத் தேர்ந்தெடுக்கவும்"
+                  : "Choose how SMS text messages are sent to caregiver phones"}
+              </p>
+            </div>
           </div>
+          <Switch
+            checked={settings.smsEnabled}
+            onCheckedChange={(val) => updateSetting("smsEnabled", val)}
+          />
         </div>
 
-        {/* Email Channel Card */}
-        <div className="rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-info/10 text-info">
-                <Mail className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-sm font-bold text-foreground">
-                  {isTamil ? "மின்னஞ்சல் அறிவிப்புகள்" : "Email Notifications"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {isTamil ? "அவசர மின்னஞ்சல் எச்சரிக்கைகள்" : "Emergency HTML email dispatch"}
+        {settings.smsEnabled && (
+          <div className="space-y-4 pt-2">
+            {/* Provider Selector */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { id: "fast2sms", label: "Fast2SMS (India)", badge: "Free / Instant" },
+                { id: "twilio", label: "Twilio (Global)", badge: "Worldwide" },
+                { id: "webhook", label: "Custom Webhook", badge: "Zapier / Make" },
+                { id: "device", label: "Phone SIM", badge: "Carrier SIM" },
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => updateSetting("smsProvider", p.id as SmsProvider)}
+                  className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all cursor-pointer ${
+                    settings.smsProvider === p.id
+                      ? "border-primary bg-primary/5 text-foreground shadow-xs font-semibold"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  <span className="text-xs">{p.label}</span>
+                  <span className="text-[10px] text-primary/80">{p.badge}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Provider Inputs */}
+            {settings.smsProvider === "fast2sms" && (
+              <div className="rounded-xl bg-secondary/40 p-4 space-y-3 text-xs border border-border/60">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="fast2sms-key" className="font-semibold text-foreground">
+                    Fast2SMS API Key
+                  </Label>
+                  <a
+                    href="https://www.fast2sms.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-primary hover:underline font-medium"
+                  >
+                    {isTamil ? "இலவச சாவி பெறுக" : "Get Free Key"} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <Input
+                  id="fast2sms-key"
+                  type="password"
+                  placeholder="Paste your Fast2SMS Authorization key here"
+                  value={settings.fast2smsApiKey}
+                  onChange={(e) => updateSetting("fast2smsApiKey", e.target.value)}
+                  className="font-mono text-xs bg-background"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {isTamil
+                    ? "இந்தியாவில் எந்தவொரு மொபைல் எண்ணுக்கும் உடனடி SMS அனுப்ப Fast2SMS-ல் இலவச கணக்கு தொடங்கி சாவியை ஒட்டவும்."
+                    : "Fast2SMS sends real instant SMS to any 10-digit Indian mobile number (+91). Free credits included on sign up."}
                 </p>
               </div>
-            </div>
-            <Switch
-              checked={settings.emailEnabled}
-              onCheckedChange={(val) => {
-                updateSetting("emailEnabled", val);
-                toast.success(
-                  val
-                    ? isTamil
-                      ? "மின்னஞ்சல் அறிவிப்புகள் இயக்கப்பட்டன"
-                      : "Email notifications enabled"
-                    : isTamil
-                      ? "மின்னஞ்சல் அறிவிப்புகள் முடக்கப்பட்டன"
-                      : "Email notifications disabled",
-                );
-              }}
-            />
-          </div>
+            )}
 
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2 text-xs">
-            <span className="text-muted-foreground">
-              {isTamil ? "சேவை நிலை:" : "Channel status:"}
-            </span>
-            <span
-              className={`flex items-center gap-1 font-semibold ${
-                settings.emailEnabled ? "text-info" : "text-muted-foreground"
-              }`}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {settings.emailEnabled
-                ? isTamil
-                  ? "செயலில் உள்ளது"
-                  : "Active & Ready"
-                : isTamil
-                  ? "முடக்கப்பட்டது"
-                  : "Disabled"}
-            </span>
+            {settings.smsProvider === "twilio" && (
+              <div className="rounded-xl bg-secondary/40 p-4 space-y-3 text-xs border border-border/60">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tw-sid" className="text-xs">
+                      Twilio Account SID
+                    </Label>
+                    <Input
+                      id="tw-sid"
+                      placeholder="ACxxxxxxxxxxxxxxxx"
+                      value={settings.twilioSid}
+                      onChange={(e) => updateSetting("twilioSid", e.target.value)}
+                      className="font-mono text-xs bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tw-token" className="text-xs">
+                      Twilio Auth Token
+                    </Label>
+                    <Input
+                      id="tw-token"
+                      type="password"
+                      placeholder="Your Twilio token"
+                      value={settings.twilioToken}
+                      onChange={(e) => updateSetting("twilioToken", e.target.value)}
+                      className="font-mono text-xs bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tw-from" className="text-xs">
+                      Twilio Phone Number
+                    </Label>
+                    <Input
+                      id="tw-from"
+                      placeholder="+1234567890"
+                      value={settings.twilioFrom}
+                      onChange={(e) => updateSetting("twilioFrom", e.target.value)}
+                      className="font-mono text-xs bg-background"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {settings.smsProvider === "webhook" && (
+              <div className="rounded-xl bg-secondary/40 p-4 space-y-3 text-xs border border-border/60">
+                <Label htmlFor="sms-webhook-url" className="font-semibold text-foreground">
+                  Custom SMS Webhook URL (Zapier / Make / n8n)
+                </Label>
+                <Input
+                  id="sms-webhook-url"
+                  placeholder="https://hooks.zapier.com/hooks/catch/..."
+                  value={settings.smsWebhookUrl}
+                  onChange={(e) => updateSetting("smsWebhookUrl", e.target.value)}
+                  className="font-mono text-xs bg-background"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  POSTs JSON <code>{`{ channel: "sms", to, message }`}</code> to your webhook
+                  trigger.
+                </p>
+              </div>
+            )}
+
+            {settings.smsProvider === "device" && (
+              <div className="rounded-xl bg-secondary/40 p-3 text-xs text-muted-foreground border border-border/60">
+                {isTamil
+                  ? "கிளவுட் SMS சாவி தேவையில்லை — அவசர சைகை தூண்டப்படும் போது மொபைல் சிம் வழியாக SMS அனுப்பப்படும்."
+                  : "Uses your phone's cellular carrier plan directly to send SMS messages."}
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* User's Own Phone & Email for Status Updates */}
+      {/* 2. Email Delivery Gateway Configuration */}
+      <div className="rounded-2xl border border-border p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-info/10 text-info">
+              <Mail className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-foreground">
+                {isTamil ? "2. மின்னஞ்சல் டெலிவரி சேவை (Email Gateway)" : "2. Email Delivery Gateway"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isTamil
+                  ? "பாதுகாவலர்களின் இன்பாக்ஸுக்கு அவசர மின்னஞ்சல் அனுப்பும் சேவை"
+                  : "Choose how emergency emails are sent directly to caregiver inboxes"}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={settings.emailEnabled}
+            onCheckedChange={(val) => updateSetting("emailEnabled", val)}
+          />
+        </div>
+
+        {settings.emailEnabled && (
+          <div className="space-y-4 pt-2">
+            {/* Email Provider Selector */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { id: "emailjs", label: "EmailJS", badge: "Free 200/mo · No backend" },
+                { id: "resend", label: "Resend API", badge: "Developer API" },
+                { id: "webhook", label: "Email Webhook", badge: "Zapier / Gmail" },
+                { id: "device", label: "Mail App", badge: "Local Client" },
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => updateSetting("emailProvider", p.id as EmailProvider)}
+                  className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all cursor-pointer ${
+                    settings.emailProvider === p.id
+                      ? "border-info bg-info/5 text-foreground shadow-xs font-semibold"
+                      : "border-border bg-card text-muted-foreground hover:border-info/40"
+                  }`}
+                >
+                  <span className="text-xs">{p.label}</span>
+                  <span className="text-[10px] text-info/80">{p.badge}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Email Provider Inputs */}
+            {settings.emailProvider === "emailjs" && (
+              <div className="rounded-xl bg-secondary/40 p-4 space-y-3 text-xs border border-border/60">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-foreground">EmailJS Credentials</p>
+                  <a
+                    href="https://www.emailjs.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-info hover:underline font-medium"
+                  >
+                    {isTamil ? "இலவச சாவி பெறுக" : "Get Free EmailJS Key"}{" "}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ejs-key" className="text-xs">
+                      Public Key (User ID)
+                    </Label>
+                    <Input
+                      id="ejs-key"
+                      placeholder="e.g. user_abcdef123"
+                      value={settings.emailjsPublicKey}
+                      onChange={(e) => updateSetting("emailjsPublicKey", e.target.value)}
+                      className="font-mono text-xs bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ejs-svc" className="text-xs">
+                      Service ID
+                    </Label>
+                    <Input
+                      id="ejs-svc"
+                      placeholder="e.g. service_voxsign"
+                      value={settings.emailjsServiceId}
+                      onChange={(e) => updateSetting("emailjsServiceId", e.target.value)}
+                      className="font-mono text-xs bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ejs-tpl" className="text-xs">
+                      Template ID
+                    </Label>
+                    <Input
+                      id="ejs-tpl"
+                      placeholder="e.g. template_alert"
+                      value={settings.emailjsTemplateId}
+                      onChange={(e) => updateSetting("emailjsTemplateId", e.target.value)}
+                      className="font-mono text-xs bg-background"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  EmailJS delivers directly from the browser to any recipient email with 200 free
+                  emails per month.
+                </p>
+              </div>
+            )}
+
+            {settings.emailProvider === "resend" && (
+              <div className="rounded-xl bg-secondary/40 p-4 space-y-3 text-xs border border-border/60">
+                <Label htmlFor="resend-key" className="font-semibold text-foreground">
+                  Resend API Key
+                </Label>
+                <Input
+                  id="resend-key"
+                  type="password"
+                  placeholder="re_xxxxxxxxxxxxxxxx"
+                  value={settings.resendApiKey}
+                  onChange={(e) => updateSetting("resendApiKey", e.target.value)}
+                  className="font-mono text-xs bg-background"
+                />
+              </div>
+            )}
+
+            {settings.emailProvider === "webhook" && (
+              <div className="rounded-xl bg-secondary/40 p-4 space-y-3 text-xs border border-border/60">
+                <Label htmlFor="email-webhook-url" className="font-semibold text-foreground">
+                  Custom Email Webhook URL (Zapier / Make / Gmail)
+                </Label>
+                <Input
+                  id="email-webhook-url"
+                  placeholder="https://hooks.zapier.com/hooks/catch/..."
+                  value={settings.emailWebhookUrl}
+                  onChange={(e) => updateSetting("emailWebhookUrl", e.target.value)}
+                  className="font-mono text-xs bg-background"
+                />
+              </div>
+            )}
+
+            {settings.emailProvider === "device" && (
+              <div className="rounded-xl bg-secondary/40 p-3 text-xs text-muted-foreground border border-border/60">
+                {isTamil
+                  ? "அவசர சைகை தூண்டப்படும் போது உங்கள் சாதனத்தின் இயல்புநிலை அஞ்சல் செயலி தானாகவே திறக்கும்."
+                  : "Opens your device's default mail client with prefilled recipient and emergency text."}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. My Contact Info for Caregiver Status Updates */}
       <div className="rounded-2xl border border-border p-5 space-y-4">
         <div>
           <h3 className="text-sm font-bold text-foreground">
-            {isTamil ? "எனது தொடர்பு விவரங்கள் (நிலை எச்சரிக்கைகளுக்கு)" : "My Contact Info (For Caregiver Status Updates)"}
+            {isTamil
+              ? "3. எனது தொடர்பு விவரங்கள் (நிலை அறிவிப்புகளுக்கு)"
+              : "3. My Contact Info (For Caregiver Status Updates)"}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             {isTamil
-              ? "பாதுகாவலர் 'பார்த்தேன்' அல்லது 'உதவிக்கு வருகிறேன்' என்று குறிக்கும் போது, இந்த எண்களுக்கு SMS மற்றும் மின்னஞ்சல் அனுப்பப்படும்."
-              : "When a caregiver marks 'Seen' or 'I will help', status updates will be sent to your phone and email."}
+              ? "பாதுகாவலர் உதவிக்கு வரும்போது உங்கள் மொபைலுக்கு SMS மற்றும் மின்னஞ்சல் வர இந்த விவரங்களை உள்ளிடவும்."
+              : "Receive status updates on your phone and email when caregivers acknowledge your request."}
           </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="my-phone">
-              {isTamil ? "மொபைல் எண் (+நாட்டுக்குறியீடு)" : "Mobile Phone (+country code)"}
+              {isTamil ? "மொபைல் எண் (+91XXXXXXXXXX)" : "Mobile Phone (+91XXXXXXXXXX)"}
             </Label>
             <Input
               id="my-phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+919876543210"
+              placeholder="+91XXXXXXXXXX"
               maxLength={20}
             />
           </div>
@@ -309,19 +579,14 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
         </Button>
       </div>
 
-      {/* Caregiver Notification Delivery Readiness */}
+      {/* 4. Caregiver Notification Delivery Directory */}
       <div className="rounded-2xl border border-border p-5 space-y-3">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-foreground">
-            {isTamil ? "பாதுகாவலர்களின் அறிவிப்பு தயார்நிலை" : "Caregivers Alert Delivery Readiness"}
+            {isTamil ? "பாதுகாவலர்களின் டெலிவரி தயார்நிலை" : "Caregiver Delivery Readiness"}
           </h3>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {isTamil
-            ? "அவசர சைகை தூண்டப்படும் போது இந்த நபர்களுக்கு SMS மற்றும் மின்னஞ்சல் உடனடியாக அனுப்பப்படும்."
-            : "Emergency gestures trigger instant SMS and Email notifications to these caregivers."}
-        </p>
 
         {contacts.length ? (
           <ul className="mt-3 space-y-2">
@@ -373,78 +638,9 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
         ) : (
           <p className="text-xs text-muted-foreground italic">
             {isTamil
-              ? "பாதுகாவலர்கள் இன்னும் சேர்க்கப்படவில்லை. மேலே உள்ள 'நம்பகமான பாதுகாவலர்கள்' பிரிவில் சேர்க்கவும்."
-              : "No trusted caregivers added yet. Add them in the 'Trusted Caregivers' section above."}
+              ? "பாதுகாவலர்கள் இன்னும் சேர்க்கப்படவில்லை. மேலே உள்ள பிரிவில் சேர்க்கவும்."
+              : "No trusted caregivers added yet. Add them in the section above."}
           </p>
-        )}
-      </div>
-
-      {/* Advanced Webhook & Gateway Integration (Collapsible) */}
-      <div className="rounded-2xl border border-border overflow-hidden">
-        <button
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="flex w-full items-center justify-between p-4 text-left text-xs font-semibold text-muted-foreground hover:bg-secondary/40 cursor-pointer"
-        >
-          <span className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-primary" />
-            {isTamil
-              ? "மேம்பட்ட Webhook மற்றும் API ஒருங்கிணைப்புகள்"
-              : "Advanced Webhook & External Gateway Settings"}
-          </span>
-          {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
-
-        {showAdvanced && (
-          <div className="border-t border-border p-5 space-y-4 bg-secondary/20">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {isTamil
-                ? "விருப்பப்பட்டால், உங்கள் தனிப்பயன் Twilio, Resend, Zapier அல்லது Make வெப்ஹூக் முகவரிகளை இங்கே உள்ளிடலாம்."
-                : "Optionally specify custom webhook endpoints (Zapier, Make, Twilio, Resend, or your own backend) for dispatching notifications."}
-            </p>
-
-            <div className="space-y-2">
-              <Label htmlFor="sms-webhook" className="text-xs">
-                {isTamil ? "SMS Webhook URL" : "Custom SMS Webhook URL"}
-              </Label>
-              <Input
-                id="sms-webhook"
-                placeholder="https://hooks.zapier.com/hooks/catch/..."
-                value={settings.smsWebhookUrl}
-                onChange={(e) => updateSetting("smsWebhookUrl", e.target.value)}
-                className="font-mono text-xs"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email-webhook" className="text-xs">
-                {isTamil ? "மின்னஞ்சல் Webhook URL" : "Custom Email Webhook URL"}
-              </Label>
-              <Input
-                id="email-webhook"
-                placeholder="https://api.resend.com/emails or webhook endpoint"
-                value={settings.emailWebhookUrl}
-                onChange={(e) => updateSetting("emailWebhookUrl", e.target.value)}
-                className="font-mono text-xs"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <div>
-                <p className="text-xs font-semibold">
-                  {isTamil ? "தானியங்கி பின்னணி அறிவிப்பு (Automated Dispatch)" : "Automated Background Dispatch"}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {isTamil
-                    ? "அனுமதி கேட்காமல் தானாகவே பின்னணியில் SMS மற்றும் மின்னஞ்சலை நேரடியாக அனுப்பும்."
-                    : "Sends SMS and Email directly in the background without asking for manual user permission or confirmation."}
-                </p>
-              </div>
-              <Switch
-                checked={settings.autoDispatch}
-                onCheckedChange={(val) => updateSetting("autoDispatch", val)}
-              />
-            </div>
-          </div>
         )}
       </div>
     </section>
