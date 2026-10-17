@@ -87,11 +87,43 @@ export function useSendGesture(userId: string | undefined) {
       });
       if (eventError) throw eventError;
 
-      // Fire the outbound SMS alert; a messaging failure must never block the emergency record.
+      // Fire outbound alerts (SMS & Email) via server function
       try {
         await notifyCaregivers({ data: { requestId: request.id } });
       } catch (alertError) {
-        console.error("[alerts] caregiver SMS failed", alertError);
+        console.warn("[alerts] server alerts skipped or failed", alertError);
+      }
+
+      // Also dispatch client-side emergency alert (handles native SMS/Email launcher and webhooks)
+      try {
+        const { data: contacts } = await supabase
+          .from("trusted_contacts")
+          .select("*")
+          .eq("sender_id", userId!)
+          .eq("is_active", true);
+
+        const { data: senderProfile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId!)
+          .maybeSingle();
+
+        const currentLang =
+          typeof window !== "undefined" && localStorage.getItem("voxsign_language") === "ta"
+            ? "ta"
+            : "en";
+
+        const { dispatchClientEmergencyAlert } = await import("@/lib/notifications");
+        await dispatchClientEmergencyAlert({
+          requestId: request.id,
+          senderName: senderProfile?.full_name || "Someone",
+          gestureCode: input.code,
+          gestureMessage: input.message,
+          contacts: (contacts ?? []) as unknown as TrustedContact[],
+          language: currentLang,
+        });
+      } catch (clientAlertError) {
+        console.warn("[alerts] client emergency dispatch error", clientAlertError);
       }
       return request as HelpRequest;
     },

@@ -16,6 +16,7 @@ import type { Profile } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
+import { EmergencyDispatchAlert } from "@/features/EmergencyDispatchAlert";
 import { useChatSpeakerAlerts } from "@/features/chat";
 import { useLanguage } from "@/lib/i18n";
 
@@ -148,6 +149,9 @@ export function AppShell({
           ))}
         </div>
       </nav>
+
+      {/* Floating Emergency SMS & Email Alert Modal */}
+      <EmergencyDispatchAlert />
     </div>
   );
 }

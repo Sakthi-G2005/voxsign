@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** Sends SMS alerts to the caregivers privately notified about the caller's help request. */
+/** Sends SMS and Email alerts to the caregivers privately notified about the caller's help request. */
 export const notifyCaregiversOfRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ requestId: z.string().uuid() }).parse(input))
@@ -19,7 +19,7 @@ export const notifyCaregiversOfRequest = createServerFn({ method: "POST" })
     return alertCaregiversOfRequest(request.id);
   });
 
-/** Sends the sender an SMS status update after a caregiver responds. */
+/** Sends the sender an SMS and Email status update after a caregiver responds. */
 export const notifySenderOfStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -41,5 +41,6 @@ export const notifySenderOfStatus = createServerFn({ method: "POST" })
       throw new Error("Help request not found");
     }
     const { alertSenderOfStatus } = await import("@/lib/alerts.server");
-    return { sent: await alertSenderOfStatus(request.id, data.status) };
+    const result = await alertSenderOfStatus(request.id, data.status);
+    return { sent: result.sms || result.email, sms: result.sms, email: result.email };
   });

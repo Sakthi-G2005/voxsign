@@ -13,6 +13,7 @@ import { CaregiverLinks } from "@/features/CaregiverLinks";
 import { TrustedContacts } from "@/features/TrustedContacts";
 import { BluetoothSpeaker } from "@/features/BluetoothSpeaker";
 import { SenderProfileOverview } from "@/features/SenderProfileOverview";
+import { NotificationSettings } from "@/features/NotificationSettings";
 import type { DeviceRow, Profile } from "@/lib/domain";
 import { useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -170,6 +171,9 @@ function ProfileBody({ profile }: { profile: Profile }) {
           <CaregiverLinks profile={profile} />
         </>
       )}
+
+      {/* SMS & Email Notification Channels and Settings */}
+      <NotificationSettings profile={profile} />
 
       <section className="surface-card p-6">
         <h2 className="text-base font-semibold">{t("account_title")}</h2>
