@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PrivateChat } from "@/features/PrivateChat";
 import { useMyRequests, useRequestsRealtime } from "@/features/requests";
 import { formatTime, relativeTime, type Profile } from "@/lib/domain";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/messages")({
   head: () => ({
@@ -22,13 +23,14 @@ export const Route = createFileRoute("/_authenticated/messages")({
 });
 
 function MessagesPage() {
+  const { t } = useLanguage();
   return (
     <RequireProfile>
       {(profile) => (
         <AppShell
           profile={profile}
-          title="Messages"
-          subtitle="Private chat with your linked caregivers"
+          title={t("messages_title")}
+          subtitle={t("messages_subtitle")}
         >
           <div className="space-y-6">
             <PrivateChat profile={profile} />
@@ -41,6 +43,7 @@ function MessagesPage() {
 }
 
 function MessagesBody({ profile }: { profile: Profile }) {
+  const { t } = useLanguage();
   const { data = [] } = useMyRequests(profile.id);
   useRequestsRealtime();
 
@@ -48,7 +51,7 @@ function MessagesBody({ profile }: { profile: Profile }) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-base font-semibold">Request updates</h2>
+      <h2 className="text-base font-semibold">{t("request_updates")}</h2>
       {data.map((r) => (
         <article key={r.id} className="surface-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -61,13 +64,13 @@ function MessagesBody({ profile }: { profile: Profile }) {
           <div className="mt-4 space-y-2 text-sm">
             <Bubble side="out" text={`${r.gesture_code} — ${r.message}`} time={r.created_at} />
             {r.seen_at ? (
-              <Bubble side="in" text="Your request has been seen." time={r.seen_at} />
+              <Bubble side="in" text={t("request_seen")} time={r.seen_at} />
             ) : null}
             {r.helped_at ? (
               <Bubble
                 side="in"
                 tone="success"
-                text={r.responder_note || "A receiver is coming to help you."}
+                text={r.responder_note || t("help_coming")}
                 time={r.helped_at}
               />
             ) : null}

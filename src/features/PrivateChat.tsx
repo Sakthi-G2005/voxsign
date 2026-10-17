@@ -16,8 +16,10 @@ import {
   type ChatPartner,
 } from "@/features/chat";
 import { useSpeaker } from "@/features/speaker";
+import { useLanguage } from "@/lib/i18n";
 
 export function PrivateChat({ profile }: { profile: Profile }) {
+  const { t } = useLanguage();
   const { data: partners = [], isLoading } = useChatPartners(profile);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   useChatRealtime();
@@ -36,12 +38,12 @@ export function PrivateChat({ profile }: { profile: Profile }) {
       <div className="surface-card p-6">
         <p className="text-sm text-muted-foreground">
           {profile.role === "receiver"
-            ? "No linked senders yet. Accept a caregiver invitation to start a private chat."
-            : "Private chat unlocks once a trusted caregiver accepts your link request."}
+            ? t("no_linked_senders")
+            : t("private_chat_unlocks")}
         </p>
         <Button asChild size="sm" className="mt-4">
           <Link to="/profile">
-            {profile.role === "receiver" ? "View caregiver invitations" : "Add a trusted caregiver"}
+            {profile.role === "receiver" ? t("view_caregiver_invitations") : t("add_trusted_caregiver")}
           </Link>
         </Button>
       </div>
@@ -52,7 +54,7 @@ export function PrivateChat({ profile }: { profile: Profile }) {
     <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
       <aside className="surface-card p-2">
         <p className="px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {profile.role === "receiver" ? "Linked senders" : "Trusted caregivers"}
+          {profile.role === "receiver" ? t("linked_senders") : t("trusted_caregivers")}
         </p>
         <ul className="space-y-1">
           {partners.map((p) => (
@@ -67,7 +69,7 @@ export function PrivateChat({ profile }: { profile: Profile }) {
                 <p className="text-sm font-semibold">{p.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {p.relationship}
-                  {p.isPrimary ? " · Primary" : ""}
+                  {p.isPrimary ? ` · ${t("primary_badge")}` : ""}
                 </p>
               </button>
             </li>
@@ -85,6 +87,7 @@ function keyOf(p: ChatPartner) {
 }
 
 function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartner }) {
+  const { t, language } = useLanguage();
   const { data: messages = [], isLoading } = useChatMessages(partner);
   const send = useSendChatMessage(partner, profile.id);
   const markRead = useMarkChatRead(partner, profile.id);
@@ -94,6 +97,25 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
   const recorderRef = useRef<MediaRecorder | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  const quickReplies =
+    language === "ta"
+      ? [
+          "வணக்கம்!",
+          "எப்படி இருக்கிறீர்கள்?",
+          "எனக்கு உதவி தேவை",
+          "நன்றி!",
+          "உங்களுக்கு உதவ நான் வருகிறேன்.",
+          "எல்லாம் நலமாக உள்ளது.",
+        ]
+      : [
+          "Hello!",
+          "How are you?",
+          "I need help",
+          "Thank you!",
+          "I am on my way to help you.",
+          "Everything is okay.",
+        ];
 
   const unread = messages.some((m) => m.author_id !== profile.id && !m.read_at);
   useEffect(() => {
@@ -125,11 +147,11 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
         ? "image"
         : null;
     if (!kind) {
-      toast.error("Please choose a photo or a video.");
+      toast.error(t("choose_photo_video"));
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
-      toast.error("File is too large (max 50 MB).");
+      toast.error(t("file_too_large"));
       return;
     }
     send.mutate(
@@ -171,7 +193,7 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
       recorder.start();
       setRecording(true);
     } catch {
-      toast.error("Microphone permission is needed to record a voice message.");
+      toast.error(t("mic_permission_needed"));
     }
   }
 
@@ -183,7 +205,7 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
           <p className="text-xs text-muted-foreground">{partner.relationship}</p>
         </div>
         <span className="flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
-          <ShieldCheck className="h-3.5 w-3.5" /> Private
+          <ShieldCheck className="h-3.5 w-3.5" /> {t("chat_private")}
         </span>
       </header>
 
@@ -207,16 +229,16 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
                 {m.body ? <p className="whitespace-pre-wrap break-words">{m.body}</p> : null}
                 <p className="mt-1 flex items-center gap-2 text-[11px] opacity-70">
                   {relativeTime(m.created_at)}
-                  {mine && m.read_at ? " · Read" : ""}
+                  {mine && m.read_at ? ` · ${t("chat_read")}` : ""}
                   {!mine && speaker.enabled && m.body ? (
                     <button
                       type="button"
-                      aria-label="Read aloud"
-                      title="Read aloud on speaker"
-                      onClick={() => speaker.speak(`Message from ${partner.name}. ${m.body}`)}
-                      className="inline-flex items-center gap-1 opacity-100 hover:underline"
+                      aria-label={t("chat_speak")}
+                      title={t("chat_speak")}
+                      onClick={() => speaker.speak(`${t("message_from")} ${partner.name}. ${m.body}`)}
+                      className="inline-flex items-center gap-1 opacity-100 hover:underline cursor-pointer"
                     >
-                      <Volume2 className="h-3 w-3" /> Speak
+                      <Volume2 className="h-3 w-3" /> {t("chat_speak")}
                     </button>
                   ) : null}
                 </p>
@@ -225,10 +247,25 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
           })
         ) : (
           <p className="text-sm text-muted-foreground">
-            No messages yet. Say hello — only the two of you can read this chat.
+            {t("no_messages_yet")}
           </p>
         )}
         <div ref={endRef} />
+      </div>
+
+      {/* Quick message shortcuts */}
+      <div className="flex items-center gap-1.5 overflow-x-auto border-t border-border/50 bg-secondary/30 px-3 py-2 text-xs">
+        <span className="shrink-0 text-muted-foreground font-medium">{t("quick_replies")}:</span>
+        {quickReplies.map((reply) => (
+          <button
+            key={reply}
+            type="button"
+            onClick={() => setText((prev) => (prev ? `${prev} ${reply}` : reply))}
+            className="shrink-0 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-primary/10 hover:border-primary/40 cursor-pointer shadow-2xs"
+          >
+            {reply}
+          </button>
+        ))}
       </div>
 
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-border p-3">
@@ -243,8 +280,8 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
           type="button"
           size="icon"
           variant="outline"
-          title="Send a photo or video"
-          aria-label="Send a photo or video"
+          title={t("send_photo_video")}
+          aria-label={t("send_photo_video")}
           disabled={send.isPending || recording}
           onClick={() => fileRef.current?.click()}
         >
@@ -254,8 +291,8 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
           type="button"
           size="icon"
           variant={recording ? "destructive" : "outline"}
-          title={recording ? "Stop and send voice message" : "Record a voice message"}
-          aria-label={recording ? "Stop and send voice message" : "Record a voice message"}
+          title={recording ? t("stop_send_voice") : t("record_voice")}
+          aria-label={recording ? t("stop_send_voice") : t("record_voice")}
           disabled={send.isPending}
           onClick={() => void toggleRecording()}
         >
@@ -268,7 +305,7 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
             if (e.key === "Enter" && !e.shiftKey) submit(e);
           }}
           rows={2}
-          placeholder="Write a private message…"
+          placeholder={t("write_private_message")}
           className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <Button type="submit" size="icon" disabled={send.isPending || !text.trim()}>
@@ -284,6 +321,7 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
 }
 
 function Attachment({ message }: { message: ChatMessage }) {
+  const { t } = useLanguage();
   const { data: url, isLoading } = useAttachmentUrl(message.attachment_path);
 
   if (isLoading || !url) {
@@ -315,7 +353,7 @@ function Attachment({ message }: { message: ChatMessage }) {
     <div className="mb-2">
       <audio src={url} controls className="w-56 max-w-full" />
       {message.attachment_duration ? (
-        <p className="text-[11px] opacity-70">Voice message · {message.attachment_duration}s</p>
+        <p className="text-[11px] opacity-70">{t("voice_message")} · {message.attachment_duration}s</p>
       ) : null}
     </div>
   );
