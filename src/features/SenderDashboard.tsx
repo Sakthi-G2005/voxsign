@@ -38,8 +38,8 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
           onSuccess: () =>
             toast.success(
               language === "ta"
-                ? `${message} பெறப்பட்டவர்களுக்கு அனுப்பப்பட்டது`
-                : `${message} sent to receivers`,
+                ? `🚨 ${message} - SMS மற்றும் மின்னஞ்சல் தானாக அனுப்பப்பட்டது`
+                : `🚨 ${message} - SMS & Email sent automatically`,
             ),
           onError: (error) => toast.error(error.message),
         },

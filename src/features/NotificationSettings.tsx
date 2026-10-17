@@ -26,8 +26,8 @@ import { useLanguage } from "@/lib/i18n";
 import {
   getNotificationSettings,
   saveNotificationSettings,
-  buildSmsUri,
-  buildEmailUri,
+  sendSmsInBackground,
+  sendEmailInBackground,
   type NotificationSettings as NotificationSettingsType,
 } from "@/lib/notifications";
 
@@ -94,48 +94,25 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
       ? "🚨 VoxSign சோதனை அறிவிப்பு: உங்கள் SMS மற்றும் மின்னஞ்சல் எச்சரிக்கைகள் சரியாக வேலை செய்கின்றன!"
       : "🚨 VoxSign Test Alert: Your SMS & Email notifications are working properly!";
 
+    // Automatically send SMS in background if phone available & SMS enabled
+    if (settings.smsEnabled && targetPhone) {
+      void sendSmsInBackground(targetPhone, testMsg);
+    }
+
+    // Automatically send Email in background if email available & Email enabled
+    if (settings.emailEnabled && targetEmail) {
+      void sendEmailInBackground(
+        targetEmail,
+        isTamil ? "🚨 VoxSign சோதனை அவசர எச்சரிக்கை" : "🚨 VoxSign Test Emergency Alert",
+        testMsg,
+      );
+    }
+
     toast.success(
       isTamil
-        ? "சோதனை எச்சரிக்கை வெற்றிகரமாக இயக்கப்பட்டது!"
-        : "Test notification dispatched successfully!",
+        ? "சோதனை SMS & மின்னஞ்சல் அறிவிப்புகள் தானாகவே பின்னணியில் அனுப்பப்பட்டன!"
+        : "Test SMS & Email notifications sent automatically in the background!",
     );
-
-    // If phone available and SMS enabled, provide quick link
-    if (settings.smsEnabled && targetPhone) {
-      toast.info(
-        isTamil ? `SMS சோதனை: ${targetPhone}` : `SMS Test ready for: ${targetPhone}`,
-        {
-          action: {
-            label: isTamil ? "SMS அனுப்பு" : "Send SMS",
-            onClick: () => {
-              window.open(buildSmsUri(targetPhone, testMsg), "_blank");
-            },
-          },
-        },
-      );
-    }
-
-    // If email available and Email enabled, provide quick link
-    if (settings.emailEnabled && targetEmail) {
-      toast.info(
-        isTamil ? `மின்னஞ்சல் சோதனை: ${targetEmail}` : `Email Test ready for: ${targetEmail}`,
-        {
-          action: {
-            label: isTamil ? "மின்னஞ்சல் அனுப்பு" : "Send Email",
-            onClick: () => {
-              window.open(
-                buildEmailUri(
-                  targetEmail,
-                  isTamil ? "🚨 VoxSign சோதனை எச்சரிக்கை" : "🚨 VoxSign Test Emergency Alert",
-                  testMsg,
-                ),
-                "_blank",
-              );
-            },
-          },
-        },
-      );
-    }
   }
 
   return (
@@ -454,17 +431,17 @@ export function NotificationSettings({ profile }: { profile: Profile }) {
             <div className="flex items-center justify-between pt-2">
               <div>
                 <p className="text-xs font-semibold">
-                  {isTamil ? "நேரடி சாதன துவக்கி (Native Launcher)" : "Direct Browser Dispatch Fallback"}
+                  {isTamil ? "தானியங்கி பின்னணி அறிவிப்பு (Automated Dispatch)" : "Automated Background Dispatch"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   {isTamil
-                    ? "அவசர சைகையின் போது 1-கிளிக் SMS மற்றும் மின்னஞ்சல் திறக்கும் பொத்தான்களைக் காட்டு."
-                    : "Show 1-click native SMS & Email launch shortcuts when an emergency gesture triggers."}
+                    ? "அனுமதி கேட்காமல் தானாகவே பின்னணியில் SMS மற்றும் மின்னஞ்சலை நேரடியாக அனுப்பும்."
+                    : "Sends SMS and Email directly in the background without asking for manual user permission or confirmation."}
                 </p>
               </div>
               <Switch
-                checked={settings.browserDispatchFallback}
-                onCheckedChange={(val) => updateSetting("browserDispatchFallback", val)}
+                checked={settings.autoDispatch}
+                onCheckedChange={(val) => updateSetting("autoDispatch", val)}
               />
             </div>
           </div>

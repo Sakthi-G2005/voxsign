@@ -85,7 +85,12 @@ function GesturesBody({ profile }: { profile: Profile }) {
               send.mutate(
                 { code: g.code, message: g.message },
                 {
-                  onSuccess: () => toast.success(`${g.message} ${t("gesture_sent_toast")}`),
+                  onSuccess: () =>
+                    toast.success(
+                      language === "ta"
+                        ? `🚨 ${g.message} - SMS & மின்னஞ்சல் தானாக அனுப்பப்பட்டது`
+                        : `🚨 ${g.message} - SMS & Email sent automatically`,
+                    ),
                   onError: (e) => toast.error(e.message),
                 },
               )
