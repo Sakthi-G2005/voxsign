@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useChatSpeakerAlerts } from "@/features/chat";
+import { useLanguage } from "@/lib/i18n";
 
 type NavItem = { to: NonNullable<LinkProps["to"]>; label: string; icon: typeof Hand };
 
@@ -47,10 +48,21 @@ export function AppShell({
   subtitle?: string;
   children: ReactNode;
 }) {
-  const nav = profile.role === "receiver" ? RECEIVER_NAV : SENDER_NAV;
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   useChatSpeakerAlerts(profile);
+
+  const nav = (profile.role === "receiver" ? RECEIVER_NAV : SENDER_NAV).map((item) => {
+    let label = item.label;
+    if (item.to === "/dashboard") label = t("nav_dashboard");
+    else if (item.to === "/messages") label = t("nav_messages");
+    else if (item.to === "/gestures") label = t("nav_gestures");
+    else if (item.to === "/history") label = t("nav_history");
+    else if (item.to === "/profile") label = t("nav_profile");
+    else if (item.to === "/requests") label = t("nav_requests");
+    return { ...item, label };
+  });
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -68,7 +80,9 @@ export function AppShell({
           </span>
           <div>
             <p className="font-display text-sm font-semibold">Gesture-to-Help</p>
-            <p className="text-xs text-sidebar-foreground/60 capitalize">{profile.role} console</p>
+            <p className="text-xs text-sidebar-foreground/60 capitalize">
+              {profile.role === "receiver" ? t("receiver_console") : t("sender_console")}
+            </p>
           </div>
         </div>
 
@@ -86,12 +100,12 @@ export function AppShell({
         </nav>
 
         <div className="rounded-xl bg-sidebar-accent/60 p-3">
-          <p className="truncate text-sm font-medium">{profile.full_name || "Unnamed user"}</p>
+          <p className="truncate text-sm font-medium">{profile.full_name || t("unnamed_user")}</p>
           <button
             onClick={signOut}
-            className="mt-2 inline-flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground"
+            className="mt-2 inline-flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground cursor-pointer"
           >
-            <LogOut className="h-3.5 w-3.5" /> Sign out
+            <LogOut className="h-3.5 w-3.5" /> {t("nav_sign_out")}
           </button>
         </div>
       </aside>

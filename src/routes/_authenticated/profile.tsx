@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Cpu, Loader2, Plus } from "lucide-react";
+import { Check, Copy, Cpu, Globe, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireProfile } from "@/components/RequireProfile";
@@ -14,6 +14,8 @@ import { TrustedContacts } from "@/features/TrustedContacts";
 import { BluetoothSpeaker } from "@/features/BluetoothSpeaker";
 import { SenderProfileOverview } from "@/features/SenderProfileOverview";
 import type { DeviceRow, Profile } from "@/lib/domain";
+import { useLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -28,10 +30,11 @@ export const Route = createFileRoute("/_authenticated/profile")({
 });
 
 function ProfilePage() {
+  const { t } = useLanguage();
   return (
     <RequireProfile>
       {(profile) => (
-        <AppShell profile={profile} title="Profile" subtitle="Account and hardware settings">
+        <AppShell profile={profile} title={t("profile_title")} subtitle={t("profile_subtitle")}>
           <ProfileBody profile={profile} />
         </AppShell>
       )}
@@ -40,6 +43,7 @@ function ProfilePage() {
 }
 
 function ProfileBody({ profile }: { profile: Profile }) {
+  const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
   const [name, setName] = useState(profile.full_name);
 
@@ -52,7 +56,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Profile updated");
+      toast.success(t("profile_updated"));
       queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -78,7 +82,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Device key created");
+      toast.success(t("device_key_created"));
       queryClient.invalidateQueries({ queryKey: ["devices"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -89,6 +93,71 @@ function ProfileBody({ profile }: { profile: Profile }) {
 
   return (
     <div className="space-y-6">
+      {/* Language Switching Section */}
+      <section className="surface-card p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Globe className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold">{t("language_title")}</h2>
+            <p className="text-xs text-muted-foreground">{t("language_subtitle")}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-md">
+          <button
+            type="button"
+            onClick={() => {
+              setLanguage("en");
+              toast.success("Language changed to English");
+            }}
+            className={cn(
+              "flex items-center justify-between rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer",
+              language === "en"
+                ? "border-primary bg-primary/5 text-foreground shadow-sm"
+                : "border-border bg-card hover:border-primary/40 text-muted-foreground"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-xs font-bold text-foreground">
+                EN
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{t("english_label")}</p>
+                <p className="text-[11px] text-muted-foreground">Default system</p>
+              </div>
+            </div>
+            {language === "en" && <Check className="h-4 w-4 text-primary" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLanguage("ta");
+              toast.success("மொழி தமிழுக்கு மாற்றப்பட்டது");
+            }}
+            className={cn(
+              "flex items-center justify-between rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer",
+              language === "ta"
+                ? "border-primary bg-primary/5 text-foreground shadow-sm"
+                : "border-border bg-card hover:border-primary/40 text-muted-foreground"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-xs font-bold text-foreground">
+                த
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{t("tamil_label")}</p>
+                <p className="text-[11px] text-muted-foreground">தமிழ் இடைமுகம்</p>
+              </div>
+            </div>
+            {language === "ta" && <Check className="h-4 w-4 text-primary" />}
+          </button>
+        </div>
+      </section>
+
       {profile.role === "sender" ? (
         <>
           <SenderProfileOverview profile={profile} />
@@ -103,20 +172,20 @@ function ProfileBody({ profile }: { profile: Profile }) {
       )}
 
       <section className="surface-card p-6">
-        <h2 className="text-base font-semibold">Account</h2>
+        <h2 className="text-base font-semibold">{t("account_title")}</h2>
         <div className="mt-4 grid gap-4 sm:max-w-md">
           <div className="space-y-2">
-            <Label htmlFor="name">Full name</Label>
+            <Label htmlFor="name">{t("full_name")}</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Role</Label>
+            <Label>{t("role")}</Label>
             <p className="rounded-md border border-border bg-secondary px-3 py-2 text-sm capitalize">
-              {profile.role}
+              {profile.role === "sender" ? t("sender_account") : t("receiver_account")}
             </p>
           </div>
           <Button onClick={() => saveName.mutate()} disabled={saveName.isPending} className="w-fit">
-            {saveName.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save changes"}
+            {saveName.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("save_changes")}
           </Button>
         </div>
       </section>
@@ -125,16 +194,14 @@ function ProfileBody({ profile }: { profile: Profile }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Cpu className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">ESP32 devices</h2>
+            <h2 className="text-base font-semibold">{t("esp32_devices")}</h2>
           </div>
           <Button size="sm" onClick={() => addDevice.mutate()} disabled={addDevice.isPending}>
-            <Plus className="h-4 w-4" /> New device key
+            <Plus className="h-4 w-4" /> {t("new_device_key")}
           </Button>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          Each device gets a private key. The glove sends it in the{" "}
-          <code className="font-mono text-xs">x-device-key</code> header — never put backend admin
-          keys in firmware or frontend code.
+          {t("device_desc")}
         </p>
 
         {devices.isLoading ? (
@@ -153,7 +220,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
                     size="sm"
                     onClick={() => {
                       void navigator.clipboard.writeText(d.api_key);
-                      toast.success("Device key copied");
+                      toast.success(t("device_key_copied"));
                     }}
                   >
                     <Copy className="h-3.5 w-3.5" />
@@ -163,12 +230,12 @@ function ProfileBody({ profile }: { profile: Profile }) {
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No devices paired yet.</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t("no_devices")}</p>
         )}
 
         <div className="mt-6 rounded-xl bg-secondary p-4">
           <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Hardware endpoint
+            {t("hardware_endpoint")}
           </p>
           <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed">
 {`POST ${endpoint}
