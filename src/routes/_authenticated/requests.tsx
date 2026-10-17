@@ -5,6 +5,7 @@ import { RequireProfile } from "@/components/RequireProfile";
 import { RequestQueue } from "@/features/ReceiverDashboard";
 import { useAllRequests, useRequestsRealtime, useUpdateRequestStatus } from "@/features/requests";
 import type { Profile } from "@/lib/domain";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/requests")({
   head: () => ({
@@ -19,10 +20,19 @@ export const Route = createFileRoute("/_authenticated/requests")({
 });
 
 function RequestsPage() {
+  const { language, t } = useLanguage();
   return (
     <RequireProfile>
       {(profile) => (
-        <AppShell profile={profile} title="Requests" subtitle="Every open assistance request">
+        <AppShell
+          profile={profile}
+          title={t("nav_requests")}
+          subtitle={
+            language === "ta"
+              ? "காத்திருக்கும் அனைத்து உதவி கோரிக்கைகளும்"
+              : "Every open assistance request"
+          }
+        >
           <RequestsBody profile={profile} />
         </AppShell>
       )}
@@ -31,6 +41,7 @@ function RequestsPage() {
 }
 
 function RequestsBody({ profile }: { profile: Profile }) {
+  const { language } = useLanguage();
   const { data } = useAllRequests(profile.role === "receiver");
   const update = useUpdateRequestStatus(profile.id);
   useRequestsRealtime();
@@ -38,7 +49,9 @@ function RequestsBody({ profile }: { profile: Profile }) {
   if (profile.role !== "receiver") {
     return (
       <p className="surface-card p-6 text-sm text-muted-foreground">
-        This page is available to receiver accounts.
+        {language === "ta"
+          ? "இந்தப் பக்கம் பெறுநர் கணக்குகளுக்கு மட்டுமே கிடைக்கும்."
+          : "This page is available to receiver accounts."}
       </p>
     );
   }

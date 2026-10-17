@@ -165,6 +165,15 @@ export function useSpeaker() {
     utterance.rate = 0.95;
     utterance.pitch = 1;
     utterance.volume = 1;
+
+    const isTamil = /[\u0B80-\u0BFF]/.test(text);
+    if (isTamil) {
+      utterance.lang = "ta-IN";
+      const voices = synth.getVoices();
+      const taVoice = voices.find((v) => v.lang.startsWith("ta") || v.lang.includes("ta-"));
+      if (taVoice) utterance.voice = taVoice;
+    }
+
     const run = () => {
       primeSpeech();
       synth.cancel();

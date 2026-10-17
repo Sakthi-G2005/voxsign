@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireProfile } from "@/components/RequireProfile";
 import { useGestureEvents, useSendGesture } from "@/features/requests";
-import { DEMO_GESTURES, formatTime, type Profile } from "@/lib/domain";
+import { formatTime, type Profile } from "@/lib/domain";
+import { getLocalizedGestures, translateGestureMessage, useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/gestures")({
@@ -20,10 +21,11 @@ export const Route = createFileRoute("/_authenticated/gestures")({
 });
 
 function GesturesPage() {
+  const { t } = useLanguage();
   return (
     <RequireProfile>
       {(profile) => (
-        <AppShell profile={profile} title="Gestures" subtitle="Demo gestures and hardware events">
+        <AppShell profile={profile} title={t("nav_gestures")} subtitle={t("demo_gestures_desc")}>
           <GesturesBody profile={profile} />
         </AppShell>
       )}
@@ -32,13 +34,15 @@ function GesturesPage() {
 }
 
 function GesturesBody({ profile }: { profile: Profile }) {
+  const { language, t } = useLanguage();
   const send = useSendGesture(profile.id);
   const { data: events = [], isLoading } = useGestureEvents(profile.id);
+  const gestures = getLocalizedGestures(language);
 
   return (
     <div className="space-y-6">
       <section className="grid gap-3 sm:grid-cols-3">
-        {DEMO_GESTURES.map((g) => (
+        {gestures.map((g) => (
           <button
             key={g.code}
             disabled={send.isPending}
@@ -46,7 +50,7 @@ function GesturesBody({ profile }: { profile: Profile }) {
               send.mutate(
                 { code: g.code, message: g.message },
                 {
-                  onSuccess: () => toast.success(`${g.message} sent`),
+                  onSuccess: () => toast.success(`${g.message} ${t("gesture_sent_toast")}`),
                   onError: (e) => toast.error(e.message),
                 },
               )
@@ -67,9 +71,9 @@ function GesturesBody({ profile }: { profile: Profile }) {
       </section>
 
       <section className="surface-card p-6">
-        <h2 className="text-base font-semibold">Gesture event log</h2>
+        <h2 className="text-base font-semibold">{t("gesture_event_log")}</h2>
         <p className="text-sm text-muted-foreground">
-          Every recognised gesture, including readings sent by the ESP32 glove.
+          {t("gesture_event_log_desc")}
         </p>
         {isLoading ? (
           <Loader2 className="mt-4 h-4 w-4 animate-spin text-muted-foreground" />
@@ -79,7 +83,7 @@ function GesturesBody({ profile }: { profile: Profile }) {
               <li key={e.id} className="py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold">
-                    {e.gesture_message || e.gesture_code}{" "}
+                    {translateGestureMessage(e.gesture_code, e.gesture_message, language)}{" "}
                     <span className="font-mono text-xs text-muted-foreground">{e.gesture_code}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">{formatTime(e.created_at)}</p>
@@ -100,7 +104,9 @@ function GesturesBody({ profile }: { profile: Profile }) {
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No gesture events recorded yet.</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {language === "ta" ? "சைகை நிகழ்வுகள் எதுவும் இதுவரை பதிவு செய்யப்படவில்லை." : "No gesture events recorded yet."}
+          </p>
         )}
       </section>
     </div>

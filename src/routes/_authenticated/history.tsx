@@ -4,6 +4,7 @@ import { RequireProfile } from "@/components/RequireProfile";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAllRequests, useMyRequests, useRequestsRealtime } from "@/features/requests";
 import { formatTime, type Profile } from "@/lib/domain";
+import { translateGestureMessage, useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -18,10 +19,19 @@ export const Route = createFileRoute("/_authenticated/history")({
 });
 
 function HistoryPage() {
+  const { language, t } = useLanguage();
   return (
     <RequireProfile>
       {(profile) => (
-        <AppShell profile={profile} title="History" subtitle="Full record of assistance requests">
+        <AppShell
+          profile={profile}
+          title={t("nav_history")}
+          subtitle={
+            language === "ta"
+              ? "உதவி கோரிக்கைகளின் முழுமையான பதிவு"
+              : "Full record of assistance requests"
+          }
+        >
           <HistoryBody profile={profile} />
         </AppShell>
       )}
@@ -30,6 +40,7 @@ function HistoryPage() {
 }
 
 function HistoryBody({ profile }: { profile: Profile }) {
+  const { language } = useLanguage();
   const isReceiver = profile.role === "receiver";
   const mine = useMyRequests(isReceiver ? undefined : profile.id);
   const all = useAllRequests(isReceiver);
@@ -44,22 +55,26 @@ function HistoryBody({ profile }: { profile: Profile }) {
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="bg-secondary text-xs tracking-wide text-muted-foreground uppercase">
             <tr>
-              <th className="px-4 py-3">Message</th>
-              {isReceiver ? <th className="px-4 py-3">Sender</th> : null}
-              <th className="px-4 py-3">Source</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">{language === "ta" ? "செய்தி" : "Message"}</th>
+              {isReceiver ? (
+                <th className="px-4 py-3">{language === "ta" ? "அனுப்புநர்" : "Sender"}</th>
+              ) : null}
+              <th className="px-4 py-3">{language === "ta" ? "ஆதாரம்" : "Source"}</th>
+              <th className="px-4 py-3">{language === "ta" ? "நேரம்" : "Created"}</th>
+              <th className="px-4 py-3">{language === "ta" ? "நிலை" : "Status"}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((r) => (
               <tr key={r.id}>
-                <td className="px-4 py-3 font-medium">{r.message}</td>
+                <td className="px-4 py-3 font-medium">
+                  {translateGestureMessage(r.gesture_code, r.message, language)}
+                </td>
                 {isReceiver ? (
                   <td className="px-4 py-3">{senders[r.sender_id]?.full_name || "—"}</td>
                 ) : null}
                 <td className="px-4 py-3 text-muted-foreground">
-                  {r.source === "device" ? "ESP32 glove" : "App"}
+                  {r.source === "device" ? "ESP32 glove" : language === "ta" ? "செயலி" : "App"}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{formatTime(r.created_at)}</td>
                 <td className="px-4 py-3">
@@ -70,7 +85,9 @@ function HistoryBody({ profile }: { profile: Profile }) {
             {!rows.length ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  No requests recorded yet.
+                  {language === "ta"
+                    ? "கோரிக்கைகள் எதுவும் இதுவரை பதிவு செய்யப்படவில்லை."
+                    : "No requests recorded yet."}
                 </td>
               </tr>
             ) : null}

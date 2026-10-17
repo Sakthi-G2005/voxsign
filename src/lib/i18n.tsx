@@ -89,6 +89,29 @@ export const translations = {
     msg_thank_you: "Thank you!",
     msg_coming: "I am on my way to help you.",
     msg_all_good: "Everything is okay.",
+
+    // Dashboard & Gestures UI
+    demo_gestures: "Demo gestures",
+    demo_gestures_desc: "Simulate the gestures the ESP32 glove will recognise.",
+    emergency_gesture: "Emergency gesture",
+    tap_to_alert: "Tap to alert receivers",
+    emergency_desc: "Your request reaches every receiver instantly and updates live as they respond.",
+    gesture_event_log: "Gesture event log",
+    gesture_event_log_desc: "Every recognised gesture, including readings sent by the ESP32 glove.",
+    translator_live: "Sign language translator · live",
+    waiting_gesture: "Waiting for a gesture from your glove… recognized signs will appear here and speak aloud.",
+    speak_again: "Speak again",
+    recent_history: "Recent history",
+    view_all: "View all",
+    mark_as_seen: "Mark as seen",
+    i_will_help: "I will help",
+    total_requests: "Total requests",
+    awaiting_help: "Awaiting help",
+    help_provided_count: "Help provided",
+    latest_request_status: "Latest request status",
+    nothing_here: "Nothing here yet.",
+    no_requests_yet: "No requests yet. Press the button to send your first one.",
+    gesture_sent_toast: "sent",
   },
   ta: {
     // Navigation
@@ -176,6 +199,29 @@ export const translations = {
     msg_thank_you: "நன்றி!",
     msg_coming: "உங்களுக்கு உதவ நான் வருகிறேன்.",
     msg_all_good: "எல்லாம் நலமாக உள்ளது.",
+
+    // Dashboard & Gestures UI
+    demo_gestures: "மாதிரி சைகைகள்",
+    demo_gestures_desc: "ESP32 கையுறை அங்கீகரிக்கும் சைகைகளை சோதிக்கவும்.",
+    emergency_gesture: "அவசர சைகை",
+    tap_to_alert: "பெறுநர்களுக்கு அறிவிக்க தட்டவும்",
+    emergency_desc: "உங்கள் கோரிக்கை ஒவ்வொரு பெறுநரையும் உடனடியாக சென்றடையும், அவர்கள் பதிலளிக்கும் போது நேரலையாக புதுப்பிக்கப்படும்.",
+    gesture_event_log: "சைகை நிகழ்வுப் பதிவு",
+    gesture_event_log_desc: "ESP32 கையுறை அனுப்பிய வாசிப்புகள் உட்பட அங்கீகரிக்கப்பட்ட ஒவ்வொரு சைகையும்.",
+    translator_live: "சைகை மொழி மொழிபெயர்ப்பாளர் · நேரலை",
+    waiting_gesture: "உங்கள் கையுறையிலிருந்து சைகைக்காகக் காத்திருக்கிறது… அங்கீகரிக்கப்பட்ட சைகைகள் இங்கே தோன்றி குரலில் ஒலிக்கும்.",
+    speak_again: "மீண்டும் பேசு",
+    recent_history: "சமீபத்திய வரலாறு",
+    view_all: "அனைத்தையும் காண்க",
+    mark_as_seen: "பார்த்ததாகக் குறிக்கவும்",
+    i_will_help: "நான் உதவுகிறேன்",
+    total_requests: "மொத்த கோரிக்கைகள்",
+    awaiting_help: "உதவிக்காக காத்திருக்கிறது",
+    help_provided_count: "உதவி வழங்கப்பட்டது",
+    latest_request_status: "சமீபத்திய கோரிக்கை நிலை",
+    nothing_here: "இன்னும் எதுவும் இல்லை.",
+    no_requests_yet: "கோரிக்கைகள் எதுவும் இல்லை. உங்கள் முதல் கோரிக்கையை அனுப்ப பொத்தானை அழுத்தவும்.",
+    gesture_sent_toast: "அனுப்பப்பட்டது",
   },
 } as const;
 
@@ -232,3 +278,115 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 export function useLanguage() {
   return useContext(LanguageContext);
 }
+
+export interface LocalizedGesture {
+  code: string;
+  message: string;
+  description: string;
+  tone: "emergency" | "waiting" | "success";
+}
+
+export function getLocalizedGestures(lang: Language): LocalizedGesture[] {
+  return [
+    {
+      code: "HELP",
+      message: lang === "ta" ? "எனக்கு உதவி தேவை" : "I NEED HELP",
+      description:
+        lang === "ta"
+          ? "உடனடி அவசர உதவி தேவைப்படுகிறது."
+          : "Emergency assistance required right now.",
+      tone: "emergency",
+    },
+    {
+      code: "YES",
+      message: lang === "ta" ? "ஆம்" : "YES",
+      description:
+        lang === "ta"
+          ? "பராமரிப்பாளரின் கேள்விக்கு ஆம் என பதிலளிக்கவும்."
+          : "Answer yes to a question from your caregiver.",
+      tone: "success",
+    },
+    {
+      code: "NO",
+      message: lang === "ta" ? "இல்லை" : "NO",
+      description:
+        lang === "ta"
+          ? "பராமரிப்பாளரின் கேள்விக்கு இல்லை என பதிலளிக்கவும்."
+          : "Answer no to a question from your caregiver.",
+      tone: "emergency",
+    },
+    {
+      code: "OK",
+      message: lang === "ta" ? "சரி" : "OK",
+      description:
+        lang === "ta"
+          ? "எல்லாம் சரியாக உள்ளது என்று தெரிவிக்கவும்."
+          : "Let your caregiver know everything is fine.",
+      tone: "success",
+    },
+    {
+      code: "WATER",
+      message: lang === "ta" ? "எனக்கு தண்ணீர் வேண்டும்" : "I NEED WATER",
+      description:
+        lang === "ta" ? "ஒரு டம்ளர் தண்ணீர் கேட்கவும்." : "Ask for a glass of water.",
+      tone: "waiting",
+    },
+    {
+      code: "FOOD",
+      message: lang === "ta" ? "எனக்கு உணவு வேண்டும்" : "I NEED FOOD",
+      description:
+        lang === "ta"
+          ? "பசி எடுப்பதாக பராமரிப்பாளருக்குத் தெரிவிக்கவும்."
+          : "Let your caregiver know you are hungry.",
+      tone: "waiting",
+    },
+    {
+      code: "MEDICINE",
+      message: lang === "ta" ? "எனக்கு மருந்து வேண்டும்" : "I NEED MEDICINE",
+      description:
+        lang === "ta"
+          ? "உங்கள் மருந்து அல்லது மாத்திரைகளைக் கேட்கவும்."
+          : "Request your medicine or tablets.",
+      tone: "emergency",
+    },
+    {
+      code: "CALL_ME",
+      message: lang === "ta" ? "என்னை அழைக்கவும்" : "CALL ME",
+      description:
+        lang === "ta"
+          ? "உங்களை அழைக்குமாறு பராமரிப்பாளரிடம் கேட்கவும்."
+          : "Ask your caregiver to call you.",
+      tone: "waiting",
+    },
+    {
+      code: "COME_HERE",
+      message: lang === "ta" ? "தயவுசெய்து இங்கே வாருங்கள்" : "PLEASE COME HERE",
+      description:
+        lang === "ta"
+          ? "பராமரிப்பாளரை உங்கள் அருகில் வருமாறு கேட்கவும்."
+          : "Ask your caregiver to come to you.",
+      tone: "waiting",
+    },
+    {
+      code: "IM_FINE",
+      message: lang === "ta" ? "நான் நலமாக இருக்கிறேன்" : "I'M FINE",
+      description:
+        lang === "ta"
+          ? "நீங்கள் நலமாக இருப்பதாக உறுதியளிக்கவும்."
+          : "Reassure your caregiver that you are okay.",
+      tone: "success",
+    },
+  ];
+}
+
+export function translateGestureMessage(
+  code: string | undefined,
+  originalMessage: string | undefined,
+  lang: Language,
+): string {
+  if (!code && !originalMessage) return "";
+  if (lang !== "ta") return originalMessage || code || "";
+  const match = getLocalizedGestures("ta").find((g) => g.code === code);
+  return match?.message || originalMessage || code || "";
+}
+

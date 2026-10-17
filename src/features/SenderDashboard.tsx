@@ -5,18 +5,25 @@ import { toast } from "sonner";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
-  DEMO_GESTURES,
   STATUS_ORDER,
   formatTime,
   relativeTime,
   type HelpRequest,
   type Profile,
 } from "@/lib/domain";
+import {
+  getLocalizedGestures,
+  translateGestureMessage,
+  useLanguage,
+  type TranslationKey,
+} from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useMyRequests, useRequestsRealtime, useSendGesture } from "@/features/requests";
 import { useSpeaker } from "@/features/speaker";
 
 export function SenderDashboard({ profile }: { profile: Profile }) {
+  const { language, t } = useLanguage();
+  const gestures = getLocalizedGestures(language);
   const { data: requests = [], isLoading } = useMyRequests(profile.id);
   const send = useSendGesture(profile.id);
   const speaker = useSpeaker();
@@ -28,12 +35,17 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
       send.mutate(
         { code, message },
         {
-          onSuccess: () => toast.success(`${message} sent to receivers`),
+          onSuccess: () =>
+            toast.success(
+              language === "ta"
+                ? `${message} பெறப்பட்டவர்களுக்கு அனுப்பப்பட்டது`
+                : `${message} sent to receivers`,
+            ),
           onError: (error) => toast.error(error.message),
         },
       );
     },
-    [send, speaker],
+    [send, speaker, language],
   );
 
   // Speak gestures coming from the ESP32 glove (they never pass through
@@ -44,32 +56,50 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
     if (!latestDeviceGesture) return;
     if (spokenIdRef.current === latestDeviceGesture.id) return;
     spokenIdRef.current = latestDeviceGesture.id;
-    speaker.speak(latestDeviceGesture.message);
-  }, [latestDeviceGesture, speaker]);
+    const toSpeak = translateGestureMessage(
+      latestDeviceGesture.gesture_code,
+      latestDeviceGesture.message,
+      language,
+    );
+    speaker.speak(toSpeak);
+  }, [latestDeviceGesture, speaker, language]);
 
   const active = requests.find((r) => r.status !== "help_provided");
   const helped = requests.filter((r) => r.status === "help_provided").length;
+  const emergencyMsg = language === "ta" ? "எனக்கு உதவி தேவை" : "I NEED HELP";
 
   return (
     <div className="space-y-6">
       <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4">
         <p className="text-sm">
-          <span className="font-semibold">Voice output:</span>{" "}
+          <span className="font-semibold">
+            {language === "ta" ? "குரல் வெளியீடு:" : "Voice output:"}
+          </span>{" "}
           <span className={speaker.connected ? "text-success" : "text-muted-foreground"}>
             {speaker.connected
-              ? `🟢 Speaking through ${speaker.device?.name ?? "Bluetooth speaker"}`
-              : "⚪ No Bluetooth speaker connected"}
+              ? `🟢 ${language === "ta" ? "பேசும் சாதனம்: " : "Speaking through "}${speaker.device?.name ?? (language === "ta" ? "புளூடூத் ஸ்பீக்கர்" : "Bluetooth speaker")}`
+              : language === "ta"
+                ? "⚪ புளூடூத் ஸ்பீக்கர் இணைக்கப்படவில்லை"
+                : "⚪ No Bluetooth speaker connected"}
           </span>
         </p>
         <Button asChild variant="outline" size="sm">
-          <Link to="/profile">{speaker.connected ? "Manage speaker" : "Connect speaker"}</Link>
+          <Link to="/profile">
+            {speaker.connected
+              ? language === "ta"
+                ? "ஸ்பீக்கரை நிர்வகி"
+                : "Manage speaker"
+              : language === "ta"
+                ? "ஸ்பீக்கரை இணைக்க"
+                : "Connect speaker"}
+          </Link>
         </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Total requests" value={requests.length} />
-        <Stat label="Awaiting help" value={requests.length - helped} tone="waiting" />
-        <Stat label="Help provided" value={helped} tone="success" />
+        <Stat label={t("total_requests")} value={requests.length} />
+        <Stat label={t("awaiting_help")} value={requests.length - helped} tone="waiting" />
+        <Stat label={t("help_provided_count")} value={helped} tone="success" />
       </div>
 
       <GestureTranslator latest={requests[0]} onSpeak={(m) => speaker.speak(m)} />
@@ -77,10 +107,10 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <section className="surface-card flex flex-col items-center gap-5 p-8 text-center">
           <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Emergency gesture
+            {t("emergency_gesture")}
           </p>
           <button
-            onClick={() => trigger("HELP", "I NEED HELP")}
+            onClick={() => trigger("HELP", emergencyMsg)}
             disabled={send.isPending}
             className="animate-pulse-ring flex h-44 w-44 flex-col items-center justify-center gap-2 rounded-full gradient-emergency text-emergency-foreground shadow-emergency transition-transform active:scale-95 disabled:opacity-70 sm:h-52 sm:w-52"
           >
@@ -89,21 +119,23 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
             ) : (
               <AlertTriangle className="h-10 w-10" />
             )}
-            <span className="font-display text-xl font-bold">I NEED HELP</span>
-            <span className="text-xs opacity-80">Tap to alert receivers</span>
+            <span className="font-display text-xl font-bold">{emergencyMsg}</span>
+            <span className="text-xs opacity-80">{t("tap_to_alert")}</span>
           </button>
           <p className="max-w-xs text-sm text-muted-foreground">
-            Your request reaches every receiver instantly and updates live as they respond.
+            {t("emergency_desc")}
           </p>
         </section>
 
         <section className="surface-card p-6">
-          <h2 className="text-base font-semibold">Latest request status</h2>
+          <h2 className="text-base font-semibold">{t("latest_request_status")}</h2>
           {active ? (
             <div className="mt-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-display text-lg font-semibold">{active.message}</p>
+                  <p className="font-display text-lg font-semibold">
+                    {translateGestureMessage(active.gesture_code, active.message, language)}
+                  </p>
                   <p className="text-xs text-muted-foreground">{formatTime(active.created_at)}</p>
                 </div>
                 <StatusBadge status={active.status} />
@@ -113,27 +145,31 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
           ) : requests.length ? (
             <div className="mt-4 rounded-xl bg-success-soft p-4">
               <p className="flex items-center gap-2 text-sm font-semibold text-success">
-                <HeartHandshake className="h-4 w-4" /> All your requests have been helped.
+                <HeartHandshake className="h-4 w-4" />{" "}
+                {language === "ta"
+                  ? "உங்கள் அனைத்து கோரிக்கைகளுக்கும் உதவி வழங்கப்பட்டுள்ளது."
+                  : "All your requests have been helped."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Last update {relativeTime(requests[0]!.updated_at)}.
+                {language === "ta" ? "கடைசி புதுப்பிப்பு " : "Last update "}
+                {relativeTime(requests[0]!.updated_at)}.
               </p>
             </div>
           ) : (
             <p className="mt-4 text-sm text-muted-foreground">
-              No requests yet. Press the button to send your first one.
+              {t("no_requests_yet")}
             </p>
           )}
         </section>
       </div>
 
       <section className="surface-card p-6">
-        <h2 className="text-base font-semibold">Demo gestures</h2>
+        <h2 className="text-base font-semibold">{t("demo_gestures")}</h2>
         <p className="text-sm text-muted-foreground">
-          Simulate the gestures the ESP32 glove will recognise.
+          {t("demo_gestures_desc")}
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {DEMO_GESTURES.map((gesture) => (
+          {gestures.map((gesture) => (
             <button
               key={gesture.code}
               disabled={send.isPending}
@@ -155,9 +191,9 @@ export function SenderDashboard({ profile }: { profile: Profile }) {
 
       <section className="surface-card p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">Recent history</h2>
+          <h2 className="text-base font-semibold">{t("recent_history")}</h2>
           <Button asChild variant="ghost" size="sm">
-            <Link to="/history">View all</Link>
+            <Link to="/history">{t("view_all")}</Link>
           </Button>
         </div>
         {isLoading ? (
@@ -177,11 +213,14 @@ function GestureTranslator({
   latest: HelpRequest | undefined;
   onSpeak: (message: string) => void;
 }) {
+  const { language, t } = useLanguage();
   const emergency = latest?.gesture_code === "HELP";
+  const displayMsg = translateGestureMessage(latest?.gesture_code, latest?.message, language);
+
   return (
     <section className="surface-card flex flex-col items-center gap-4 p-8 text-center">
       <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Sign language translator · live
+        {t("translator_live")}
       </p>
       <div
         className={cn(
@@ -195,18 +234,18 @@ function GestureTranslator({
       </div>
       {latest ? (
         <>
-          <p className="font-display text-3xl font-bold tracking-tight">“{latest.message}”</p>
+          <p className="font-display text-3xl font-bold tracking-tight">“{displayMsg}”</p>
           <p className="text-xs text-muted-foreground">
             {relativeTime(latest.created_at)} ·{" "}
-            {latest.source === "device" ? "ESP32 glove" : "App"}
+            {latest.source === "device" ? "ESP32 glove" : language === "ta" ? "செயலி" : "App"}
           </p>
-          <Button variant="outline" size="sm" onClick={() => onSpeak(latest.message)}>
-            <Volume2 className="mr-2 h-4 w-4" /> Speak again
+          <Button variant="outline" size="sm" onClick={() => onSpeak(displayMsg)}>
+            <Volume2 className="mr-2 h-4 w-4" /> {t("speak_again")}
           </Button>
         </>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Waiting for a gesture from your glove… recognized signs will appear here and speak aloud.
+          {t("waiting_gesture")}
         </p>
       )}
     </section>
@@ -214,17 +253,21 @@ function GestureTranslator({
 }
 
 export function RequestList({ requests }: { requests: HelpRequest[] }) {
+  const { language, t } = useLanguage();
   if (!requests.length) {
-    return <p className="mt-4 text-sm text-muted-foreground">Nothing here yet.</p>;
+    return <p className="mt-4 text-sm text-muted-foreground">{t("nothing_here")}</p>;
   }
   return (
     <ul className="mt-4 divide-y divide-border">
       {requests.map((r) => (
         <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div>
-            <p className="text-sm font-semibold">{r.message}</p>
+            <p className="text-sm font-semibold">
+              {translateGestureMessage(r.gesture_code, r.message, language)}
+            </p>
             <p className="text-xs text-muted-foreground">
-              {formatTime(r.created_at)} · {r.source === "device" ? "ESP32 glove" : "App"}
+              {formatTime(r.created_at)} ·{" "}
+              {r.source === "device" ? "ESP32 glove" : language === "ta" ? "செயலி" : "App"}
             </p>
           </div>
           <StatusBadge status={r.status} />
@@ -234,7 +277,15 @@ export function RequestList({ requests }: { requests: HelpRequest[] }) {
   );
 }
 
+const TIMELINE_I18N_KEY: Record<string, TranslationKey> = {
+  sent: "status_sent",
+  delivered: "status_delivered",
+  seen: "status_seen",
+  help_provided: "status_help_provided",
+};
+
 function Timeline({ request }: { request: HelpRequest }) {
+  const { t } = useLanguage();
   const currentIndex = STATUS_ORDER.indexOf(request.status);
   const times: Record<string, string | null> = {
     sent: request.created_at,
@@ -256,9 +307,10 @@ function Timeline({ request }: { request: HelpRequest }) {
             />
             <div>
               <p className={cn("text-sm font-medium", !done && "text-muted-foreground")}>
-                {status === "help_provided"
-                  ? "Help Provided"
-                  : status.charAt(0).toUpperCase() + status.slice(1)}
+                {t(TIMELINE_I18N_KEY[status]) ||
+                  (status === "help_provided"
+                    ? "Help Provided"
+                    : status.charAt(0).toUpperCase() + status.slice(1))}
               </p>
               {times[status] ? (
                 <p className="text-xs text-muted-foreground">{formatTime(times[status]!)}</p>
