@@ -197,3 +197,73 @@ export async function dispatchClientEmergencyAlert(params: {
 
   return detail;
 }
+
+/** Dispatches client-side status alerts (SMS/Email via webhooks) when caregiver responds. */
+export async function dispatchClientStatusAlert(params: {
+  requestId: string;
+  senderPhone: string | null;
+  senderEmail: string | null;
+  senderName: string;
+  caregiverName: string;
+  status: "delivered" | "seen" | "help_provided";
+  message: string;
+  language: Language;
+}): Promise<void> {
+  const settings = getNotificationSettings();
+  const timestamp = new Date().toISOString();
+  const isTamil = params.language === "ta";
+
+  const statusLabel =
+    params.status === "help_provided"
+      ? isTamil
+        ? "உதவி வருகிறது — உங்கள் பாதுகாவலர் உங்களை நோக்கி வருகிறார்."
+        : "Help is on the way — your caregiver is coming."
+      : params.status === "seen"
+        ? isTamil
+          ? "உங்கள் அவசர கோரிக்கையை பாதுகாவலர் பார்த்துள்ளார்."
+          : "Your caregiver has seen your emergency request."
+        : isTamil
+          ? "உங்கள் கோரிக்கை பாதுகாவலருக்கு டெலிவரி செய்யப்பட்டது."
+          : "Your emergency request was delivered.";
+
+  const smsText = `VoxSign: ${params.caregiverName} - ${statusLabel}`;
+
+  if (settings.smsEnabled && settings.smsWebhookUrl && params.senderPhone) {
+    try {
+      void fetch(settings.smsWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: "sms",
+          event: "status_update",
+          status: params.status,
+          recipient: params.senderPhone,
+          body: smsText,
+          timestamp,
+        }),
+      }).catch((e) => console.warn("[notifications] SMS status webhook error", e));
+    } catch (e) {
+      console.warn("[notifications] SMS status webhook trigger failed", e);
+    }
+  }
+
+  if (settings.emailEnabled && settings.emailWebhookUrl && params.senderEmail) {
+    try {
+      void fetch(settings.emailWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: "email",
+          event: "status_update",
+          status: params.status,
+          recipient: params.senderEmail,
+          subject: `VoxSign Update: ${statusLabel}`,
+          body: `${statusLabel}\n\nSender: ${params.senderName}\nCaregiver: ${params.caregiverName}\nOriginal message: "${params.message}"\nTime: ${new Date().toLocaleString()}`,
+          timestamp,
+        }),
+      }).catch((e) => console.warn("[notifications] Email status webhook error", e));
+    } catch (e) {
+      console.warn("[notifications] Email status webhook trigger failed", e);
+    }
+  }
+}

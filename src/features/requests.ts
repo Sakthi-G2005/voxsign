@@ -159,7 +159,47 @@ export function useUpdateRequestStatus(userId: string | undefined) {
       try {
         await notifyStatus({ data: { requestId: input.id, status: input.status } });
       } catch (alertError) {
-        console.error("[alerts] status SMS failed", alertError);
+        console.warn("[alerts] status SMS/Email alert failed", alertError);
+      }
+
+      // Also trigger client-side status alert
+      try {
+        const { data: requestRow } = await supabase
+          .from("help_requests")
+          .select("id, sender_id, message")
+          .eq("id", input.id)
+          .maybeSingle();
+
+        if (requestRow) {
+          const { data: senderProfile } = await supabase
+            .from("profiles")
+            .select("full_name, phone, email")
+            .eq("id", requestRow.sender_id)
+            .maybeSingle();
+
+          const { data: responderProfile } = userId
+            ? await supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle()
+            : { data: null };
+
+          const currentLang =
+            typeof window !== "undefined" && localStorage.getItem("voxsign_language") === "ta"
+              ? "ta"
+              : "en";
+
+          const { dispatchClientStatusAlert } = await import("@/lib/notifications");
+          await dispatchClientStatusAlert({
+            requestId: input.id,
+            senderPhone: senderProfile?.phone ?? null,
+            senderEmail: senderProfile?.email ?? null,
+            senderName: senderProfile?.full_name || "Sender",
+            caregiverName: responderProfile?.full_name || "Caregiver",
+            status: input.status as "delivered" | "seen" | "help_provided",
+            message: requestRow.message,
+            language: currentLang,
+          });
+        }
+      } catch (clientStatusErr) {
+        console.warn("[alerts] client status alert error", clientStatusErr);
       }
     },
     onSuccess: () => {
