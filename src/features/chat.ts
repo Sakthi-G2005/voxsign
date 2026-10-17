@@ -132,11 +132,24 @@ export function useSendChatMessage(partner: ChatPartner | undefined, authorId: s
         attachment_mime = mime;
       }
 
+      let resolvedBody = (input.body ?? "").trim();
+      if (!resolvedBody) {
+        if (input.kind === "audio") {
+          resolvedBody = "Voice message";
+        } else if (input.kind === "image") {
+          resolvedBody = "Photo";
+        } else if (input.kind === "video") {
+          resolvedBody = "Video";
+        } else {
+          resolvedBody = "Message";
+        }
+      }
+
       const { error } = await supabase.from("chat_messages").insert({
         sender_id: partner!.senderId,
         receiver_id: partner!.receiverId,
         author_id: authorId,
-        body: input.body ?? "",
+        body: resolvedBody,
         attachment_path,
         attachment_type: input.kind ?? null,
         attachment_mime,

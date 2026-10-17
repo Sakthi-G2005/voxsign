@@ -154,8 +154,15 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
       toast.error(t("file_too_large"));
       return;
     }
+    const caption = text.trim();
+    setText("");
     send.mutate(
-      { file, kind, filename: file.name },
+      {
+        file,
+        kind,
+        filename: file.name,
+        body: caption || (kind === "image" ? "Photo" : "Video"),
+      },
       { onError: (error) => toast.error(error.message) },
     );
   }
@@ -185,6 +192,7 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
             kind: "audio",
             filename: "voice.webm",
             duration: Math.round((Date.now() - startedAt) / 1000),
+            body: "Voice message",
           },
           { onError: (error) => toast.error(error.message) },
         );
@@ -215,6 +223,12 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
         ) : messages.length ? (
           messages.map((m) => {
             const mine = m.author_id === profile.id;
+            const isPlaceholder =
+              m.body === "Voice message" ||
+              m.body === "Photo" ||
+              m.body === "Video" ||
+              m.body === "Message";
+
             return (
               <div
                 key={m.id}
@@ -226,16 +240,28 @@ function ChatPanel({ profile, partner }: { profile: Profile; partner: ChatPartne
                 )}
               >
                 {m.attachment_path ? <Attachment message={m} /> : null}
-                {m.body ? <p className="whitespace-pre-wrap break-words">{m.body}</p> : null}
+                {m.body && (!m.attachment_path || !isPlaceholder) ? (
+                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                ) : null}
                 <p className="mt-1 flex items-center gap-2 text-[11px] opacity-70">
                   {relativeTime(m.created_at)}
                   {mine && m.read_at ? ` · ${t("chat_read")}` : ""}
-                  {!mine && speaker.enabled && m.body ? (
+                  {!mine && speaker.enabled ? (
                     <button
                       type="button"
                       aria-label={t("chat_speak")}
                       title={t("chat_speak")}
-                      onClick={() => speaker.speak(`${t("message_from")} ${partner.name}. ${m.body}`)}
+                      onClick={() => {
+                        let speechBody = m.body;
+                        if (m.attachment_path && isPlaceholder) {
+                          if (m.attachment_type === "audio") speechBody = t("voice_message");
+                          else if (m.attachment_type === "image")
+                            speechBody = language === "ta" ? "புகைப்படம்" : "Photo";
+                          else if (m.attachment_type === "video")
+                            speechBody = language === "ta" ? "வீடியோ" : "Video";
+                        }
+                        speaker.speak(`${t("message_from")} ${partner.name}. ${speechBody}`);
+                      }}
                       className="inline-flex items-center gap-1 opacity-100 hover:underline cursor-pointer"
                     >
                       <Volume2 className="h-3 w-3" /> {t("chat_speak")}
