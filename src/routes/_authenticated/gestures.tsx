@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Hand, Loader2 } from "lucide-react";
+import { Hand, Loader2, Sliders } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireProfile } from "@/components/RequireProfile";
+import { GestureCalibrationView } from "@/features/calibration/GestureCalibrationView";
 import { useGestureEvents, useSendGesture } from "@/features/requests";
 import { formatTime, type Profile } from "@/lib/domain";
 import { getLocalizedGestures, translateGestureMessage, useLanguage } from "@/lib/i18n";
@@ -12,9 +14,9 @@ export const Route = createFileRoute("/_authenticated/gestures")({
   head: () => ({
     meta: [
       { title: "Gestures — Gesture-to-Help" },
-      { name: "description", content: "Trigger demo gestures and review recognised gesture events." },
+      { name: "description", content: "Trigger demo gestures, calibrate flex sensors, and test recognized signs." },
       { property: "og:title", content: "Gestures — Gesture-to-Help" },
-      { property: "og:description", content: "Demo gestures and hardware gesture event log." },
+      { property: "og:description", content: "Demo gestures, personalized calibration, and hardware gesture logs." },
     ],
   }),
   component: GesturesPage,
@@ -35,13 +37,46 @@ function GesturesPage() {
 
 function GesturesBody({ profile }: { profile: Profile }) {
   const { language, t } = useLanguage();
+  const [activeTab, setActiveTab] = useState<"demo" | "calibration">("demo");
   const send = useSendGesture(profile.id);
   const { data: events = [], isLoading } = useGestureEvents(profile.id);
   const gestures = getLocalizedGestures(language);
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-3 sm:grid-cols-3">
+      {/* View Switcher Tabs */}
+      <div className="flex rounded-xl border border-border bg-card p-1.5 shadow-sm max-w-md">
+        <button
+          onClick={() => setActiveTab("demo")}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition-all cursor-pointer",
+            activeTab === "demo"
+              ? "bg-primary text-primary-foreground shadow"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Hand className="h-4 w-4" />
+          {t("tab_demo_gestures")}
+        </button>
+        <button
+          onClick={() => setActiveTab("calibration")}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition-all cursor-pointer",
+            activeTab === "calibration"
+              ? "bg-primary text-primary-foreground shadow"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Sliders className="h-4 w-4" />
+          {t("tab_calibration")}
+        </button>
+      </div>
+
+      {activeTab === "calibration" ? (
+        <GestureCalibrationView profile={profile} />
+      ) : (
+        <>
+          <section className="grid gap-3 sm:grid-cols-3">
         {gestures.map((g) => (
           <button
             key={g.code}
@@ -109,6 +144,8 @@ function GesturesBody({ profile }: { profile: Profile }) {
           </p>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

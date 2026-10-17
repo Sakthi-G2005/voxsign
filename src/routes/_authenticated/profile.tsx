@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Cpu, Globe, Loader2, Plus } from "lucide-react";
+import { Check, Copy, Cpu, Globe, Loader2, Plus, Sliders } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireProfile } from "@/components/RequireProfile";
@@ -196,9 +196,17 @@ function ProfileBody({ profile }: { profile: Profile }) {
             <Cpu className="h-4 w-4 text-primary" />
             <h2 className="text-base font-semibold">{t("esp32_devices")}</h2>
           </div>
-          <Button size="sm" onClick={() => addDevice.mutate()} disabled={addDevice.isPending}>
-            <Plus className="h-4 w-4" /> {t("new_device_key")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/gestures">
+                <Sliders className="h-4 w-4 mr-1.5 text-primary" />
+                {language === "ta" ? "சைகை அளவீடு (Calibration)" : "Gesture Calibration"}
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => addDevice.mutate()} disabled={addDevice.isPending}>
+              <Plus className="h-4 w-4" /> {t("new_device_key")}
+            </Button>
+          </div>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("device_desc")}
