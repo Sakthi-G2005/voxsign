@@ -1,13 +1,27 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Cpu, Globe, Loader2, Plus, Sliders } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Code2,
+  Copy,
+  Cpu,
+  Database,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Plus,
+  Sliders,
+  Terminal,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireProfile } from "@/components/RequireProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { CaregiverLinks } from "@/features/CaregiverLinks";
 import { TrustedContacts } from "@/features/TrustedContacts";
@@ -41,6 +55,176 @@ function ProfilePage() {
       )}
     </RequireProfile>
   );
+}
+
+const SUPABASE_RPC_SQL = `-- 1-Click Supabase SQL Setup for ESP32 Hardware
+-- Paste and run in: https://supabase.com/dashboard/project/thpjccuzjyjtryvgcjmp/sql/new
+
+CREATE OR REPLACE FUNCTION public.submit_device_gesture(payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _device_key text;
+  _gesture_code text;
+  _gesture_message text;
+  _sensor_data jsonb;
+  _device record;
+  _request_id uuid;
+  _code text;
+  _message text;
+BEGIN
+  _device_key := COALESCE(payload->>'device_key', payload->>'p_device_key');
+  _gesture_code := COALESCE(payload->>'gesture_code', payload->>'p_gesture_code', 'HELP');
+  _gesture_message := COALESCE(payload->>'gesture_message', payload->>'p_gesture_message');
+  _sensor_data := COALESCE(payload->'sensor_data', payload->'p_sensor_data', '{}'::jsonb);
+
+  IF _device_key IS NULL OR TRIM(_device_key) = '' THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Missing device_key in payload');
+  END IF;
+
+  SELECT id, user_id, is_active INTO _device
+  FROM public.devices
+  WHERE api_key = TRIM(_device_key);
+
+  IF _device.id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Invalid device key');
+  END IF;
+
+  IF NOT _device.is_active THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Device is disabled');
+  END IF;
+
+  _code := UPPER(REPLACE(TRIM(_gesture_code), ' ', '_'));
+  _message := COALESCE(NULLIF(TRIM(_gesture_message), ''), REPLACE(_code, '_', ' '));
+
+  INSERT INTO public.help_requests (sender_id, gesture_code, message, status, source)
+  VALUES (_device.user_id, _code, _message, 'sent', 'device')
+  RETURNING id INTO _request_id;
+
+  INSERT INTO public.gesture_events (
+    user_id,
+    device_id,
+    help_request_id,
+    gesture_code,
+    gesture_message,
+    sensor_data,
+    source
+  )
+  VALUES (
+    _device.user_id,
+    _device.id,
+    _request_id,
+    _code,
+    _message,
+    _sensor_data,
+    'device'
+  );
+
+  UPDATE public.devices
+  SET last_seen_at = now()
+  WHERE id = _device.id;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'help_request_id', _request_id,
+    'gesture_code', _code,
+    'gesture_message', _message,
+    'status', 'sent'
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.submit_device_gesture(jsonb) TO anon, authenticated, service_role;`;
+
+function getArduinoCode(rpcUrl: string, anonKey: string, deviceKey: string) {
+  return `/*
+ * VoxSign ESP32 Flex Glove Firmware
+ * Connects directly to Supabase Cloud PostgREST RPC (Fixes HTTP 405)
+ */
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+
+const char* WIFI_SSID     = "YOUR_WIFI_NAME";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+
+// Supabase PostgREST Cloud Endpoint (24/7 HTTPS)
+const char* SUPABASE_RPC_URL  = "${rpcUrl}";
+const char* SUPABASE_ANON_KEY = "${anonKey}";
+const char* DEVICE_KEY        = "${deviceKey}";
+
+// Flex Sensor Pins (ADC1)
+const int PIN_FLEX_THUMB  = 36;
+const int PIN_FLEX_INDEX  = 34; // Flex 2 (GPIO 34)
+const int PIN_FLEX_MIDDLE = 35; // Flex 3 (GPIO 35)
+const int PIN_FLEX_RING   = 32;
+const int PIN_FLEX_PINKY  = 33;
+
+const int THRESHOLD_BENT = 1800;
+unsigned long lastSend = 0;
+
+void setup() {
+  Serial.begin(115200);
+  analogReadResolution(12);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\\nWiFi connected! Ready to send gestures.");
+}
+
+void loop() {
+  int f1 = analogRead(PIN_FLEX_THUMB);
+  int f2 = analogRead(PIN_FLEX_INDEX);  // GPIO 34
+  int f3 = analogRead(PIN_FLEX_MIDDLE); // GPIO 35
+  int f4 = analogRead(PIN_FLEX_RING);
+  int f5 = analogRead(PIN_FLEX_PINKY);
+
+  Serial.printf("Flex 2 (GPIO 34): %d | Flex 3 (GPIO 35): %d\\n", f2, f3);
+
+  String code = "";
+  String msg = "";
+  if (f2 > THRESHOLD_BENT && f3 > THRESHOLD_BENT) {
+    code = "HELP"; msg = "I NEED HELP";
+  } else if (f3 > THRESHOLD_BENT) {
+    code = "WATER"; msg = "I NEED WATER";
+  } else if (f2 > THRESHOLD_BENT) {
+    code = "MEDICINE"; msg = "I NEED MEDICINE";
+  }
+
+  if (code.length() > 0 && millis() - lastSend > 3000) {
+    sendGesture(code, msg, f1, f2, f3, f4, f5);
+    lastSend = millis();
+  }
+  delay(300);
+}
+
+void sendGesture(String code, String msg, int f1, int f2, int f3, int f4, int f5) {
+  WiFiClientSecure client;
+  client.setInsecure(); // Bypass cert verification
+  HTTPClient http;
+  if (!http.begin(client, SUPABASE_RPC_URL)) return;
+
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", SUPABASE_ANON_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+
+  String body = "{\\"device_key\\":\\"" + String(DEVICE_KEY) +
+                "\\",\\"gesture_code\\":\\"" + code +
+                "\\",\\"gesture_message\\":\\"" + msg +
+                "\\",\\"sensor_data\\":{\\"flex1\\":" + String(f1) +
+                ",\\"flex2\\":" + String(f2) +
+                ",\\"flex3\\":" + String(f3) +
+                ",\\"flex4\\":" + String(f4) +
+                ",\\"flex5\\":" + String(f5) + "}}";
+
+  int code_resp = http.POST(body);
+  Serial.printf("HTTP Response: %d\\n", code_resp);
+  if (code_resp > 0) Serial.println(http.getString());
+  http.end();
+}`;
 }
 
 function ProfileBody({ profile }: { profile: Profile }) {
@@ -89,8 +273,12 @@ function ProfileBody({ profile }: { profile: Profile }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const endpoint =
-    typeof window !== "undefined" ? `${window.location.origin}/api/public/gesture` : "/api/public/gesture";
+  const supabaseUrl =
+    (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://thpjccuzjyjtryvgcjmp.supabase.co";
+  const supabaseAnonKey =
+    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_F9sfFPCQHDdSMa27udqxOw_8O0rv61E";
+  const hardwareEndpoint = `${supabaseUrl}/rest/v1/rpc/submit_device_gesture`;
+  const activeDeviceKey = devices.data?.[0]?.api_key || "YOUR_DEVICE_KEY_FROM_ABOVE";
 
   return (
     <div className="space-y-6">
@@ -245,24 +433,167 @@ function ProfileBody({ profile }: { profile: Profile }) {
           <p className="mt-4 text-sm text-muted-foreground">{t("no_devices")}</p>
         )}
 
-        <div className="mt-6 rounded-xl bg-secondary p-4">
-          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            {t("hardware_endpoint")}
-          </p>
-          <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed">
-{`POST ${endpoint}
-x-device-key: <your device key>
-Content-Type: application/json
+        {/* HTTP 405 Not Allowed Resolution Alert */}
+        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-amber-300">
+                {t("hardware_405_title")}
+              </p>
+              <p className="text-xs text-amber-200/90 leading-relaxed">
+                {t("hardware_405_desc")}
+              </p>
+            </div>
+          </div>
+        </div>
 
-{
-  "gesture_code": "HELP",
-  "gesture_message": "I NEED HELP",
-  "sensor_data": {
-    "flex1": 720, "flex2": 480, "flex3": 750,
-    "flex4": 150, "flex5": 20
-  }
-}`}
-          </pre>
+        {/* Live Supabase Endpoint Card */}
+        <div className="mt-4 rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
+                POST
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {t("hardware_endpoint")}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard.writeText(hardwareEndpoint);
+                toast.success(t("hardware_copied"));
+              }}
+            >
+              <Copy className="h-3.5 w-3.5 mr-1.5" />
+              {t("hardware_copy_code")}
+            </Button>
+          </div>
+          <code className="block rounded-lg bg-secondary px-3 py-2 font-mono text-xs break-all text-primary">
+            {hardwareEndpoint}
+          </code>
+        </div>
+
+        {/* Interactive Tabs: Arduino Code, SQL Setup, cURL Test */}
+        <div className="mt-4">
+          <Tabs defaultValue="arduino" className="w-full">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="arduino" className="text-xs flex items-center gap-1.5">
+                <Code2 className="h-3.5 w-3.5" />
+                <span className="truncate">{t("hardware_tab_arduino")}</span>
+              </TabsTrigger>
+              <TabsTrigger value="sql" className="text-xs flex items-center gap-1.5">
+                <Database className="h-3.5 w-3.5" />
+                <span className="truncate">{t("hardware_tab_sql")}</span>
+              </TabsTrigger>
+              <TabsTrigger value="curl" className="text-xs flex items-center gap-1.5">
+                <Terminal className="h-3.5 w-3.5" />
+                <span className="truncate">{t("hardware_tab_curl")}</span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab 1: Arduino C++ Code */}
+            <TabsContent value="arduino" className="mt-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {language === "ta"
+                    ? "GPIO 34 & 35 பின்களுடன் உங்கள் ESP32-ல் நேரடியாக பதிவேற்றக்கூடிய முழுமையான குறியீடு:"
+                    : "Ready-to-flash C++ sketch for ESP32 with your GPIO 34 & 35 flex sensor pins:"}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const code = getArduinoCode(hardwareEndpoint, supabaseAnonKey, activeDeviceKey);
+                    void navigator.clipboard.writeText(code);
+                    toast.success(t("hardware_copied"));
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  {t("hardware_copy_code")}
+                </Button>
+              </div>
+              <pre className="max-h-72 overflow-y-auto rounded-xl bg-secondary/80 p-3 font-mono text-[11px] leading-relaxed border border-border">
+                {getArduinoCode(hardwareEndpoint, supabaseAnonKey, activeDeviceKey)}
+              </pre>
+            </TabsContent>
+
+            {/* Tab 2: Supabase SQL Setup */}
+            <TabsContent value="sql" className="mt-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("hardware_sql_hint")}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    asChild
+                  >
+                    <a
+                      href="https://supabase.com/dashboard/project/thpjccuzjyjtryvgcjmp/sql/new"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      {t("hardware_sql_open")}
+                    </a>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(SUPABASE_RPC_SQL);
+                      toast.success(t("hardware_copied"));
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1.5" />
+                    {t("hardware_copy_code")}
+                  </Button>
+                </div>
+              </div>
+              <pre className="max-h-72 overflow-y-auto rounded-xl bg-secondary/80 p-3 font-mono text-[11px] leading-relaxed border border-border">
+                {SUPABASE_RPC_SQL}
+              </pre>
+            </TabsContent>
+
+            {/* Tab 3: cURL Command */}
+            <TabsContent value="curl" className="mt-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {language === "ta"
+                    ? "முனையத்தில் (Terminal/CMD) நேரடியாக இயக்கி சோதனை செய்ய:"
+                    : "Run directly in Terminal / Command Prompt to test endpoint delivery:"}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const curlCmd = `curl.exe -i -X POST "${hardwareEndpoint}" -H "apikey: ${supabaseAnonKey}" -H "Content-Type: application/json" -d "{\\"device_key\\":\\"${activeDeviceKey}\\",\\"gesture_code\\":\\"HELP\\",\\"gesture_message\\":\\"I NEED HELP\\",\\"sensor_data\\":{\\"flex2\\":473,\\"flex3\\":2758}}"`;
+                    void navigator.clipboard.writeText(curlCmd);
+                    toast.success(t("hardware_copied"));
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  {t("hardware_copy_code")}
+                </Button>
+              </div>
+              <pre className="overflow-x-auto rounded-xl bg-secondary/80 p-3 font-mono text-[11px] leading-relaxed border border-border">
+{`curl.exe -i -X POST "${hardwareEndpoint}" \\
+  -H "apikey: ${supabaseAnonKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "device_key": "${activeDeviceKey}",
+    "gesture_code": "HELP",
+    "gesture_message": "I NEED HELP",
+    "sensor_data": { "flex2": 473, "flex3": 2758 }
+  }'`}
+              </pre>
+            </TabsContent>
+          </Tabs>
         </div>
       </section>
     </div>

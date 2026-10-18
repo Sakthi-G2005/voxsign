@@ -33,14 +33,25 @@ export const translations = {
     receiver_account: "receiver account",
 
     // ESP32 Devices
-    esp32_devices: "ESP32 devices",
+    esp32_devices: "ESP32 Devices & Hardware Setup",
     new_device_key: "New device key",
     device_desc:
-      "Each device gets a private key. The glove sends it in the x-device-key header — never put backend admin keys in firmware or frontend code.",
-    no_devices: "No devices paired yet.",
+      "Each glove device gets a unique private key for authentication. The ESP32 submits live flex gestures directly to Supabase cloud.",
+    no_devices: "No devices paired yet. Click '+ New device key' to create one.",
     device_key_copied: "Device key copied",
     device_key_created: "Device key created",
-    hardware_endpoint: "Hardware endpoint",
+    hardware_endpoint: "Supabase PostgREST Cloud Endpoint",
+    hardware_405_title: "Fix for 'HTTP 405 Not Allowed' Error",
+    hardware_405_desc:
+      "GitHub Pages is a static host that blocks all HTTP POST requests with 405. VoxSign hardware devices send POST requests directly to the 24/7 Supabase PostgREST endpoint below.",
+    hardware_tab_arduino: "ESP32 Arduino C++ Code",
+    hardware_tab_sql: "1-Click Supabase SQL Setup",
+    hardware_tab_curl: "cURL / Postman Test",
+    hardware_sql_hint:
+      "Run this SQL script once in your Supabase SQL Editor to enable device gesture submissions and real-time caregiver alerts.",
+    hardware_sql_open: "Open Supabase SQL Editor",
+    hardware_copy_code: "Copy Code",
+    hardware_copied: "Copied to clipboard!",
 
     // Lifecycle
     status_sent: "Sent",
@@ -219,14 +230,25 @@ export const translations = {
     receiver_account: "பெறுநர் கணக்கு",
 
     // ESP32 Devices
-    esp32_devices: "ESP32 சாதனங்கள்",
+    esp32_devices: "ESP32 சாதனங்கள் & வன்பொருள் அமைப்பு",
     new_device_key: "புதிய சாதன சாவி",
     device_desc:
-      "ஒவ்வொரு சாதனத்திற்கும் ஒரு தனிப்பட்ட சாவி வழங்கப்படுகிறது. கையுறை அதை x-device-key தலைப்பில் அனுப்புகிறது — நிர்வாக சாவிகளை ஃபார்ம்வேரில் பகிர வேண்டாம்.",
-    no_devices: "சாதனங்கள் இன்னும் இணைக்கப்படவில்லை.",
+      "ஒவ்வொரு கையுறை சாதனத்திற்கும் ஒரு தனிப்பட்ட சாவி வழங்கப்படுகிறது. ESP32 வன்பொருள் நேரடியாக சைகைகளை Supabase கிளவுடுக்கு அனுப்புகிறது.",
+    no_devices: "சாதனங்கள் இன்னும் இணைக்கப்படவில்லை. '+ புதிய சாதன சாவி' பொத்தானைக் கிளிக் செய்யவும்.",
     device_key_copied: "சாதன சாவி நகலெடுக்கப்பட்டது",
     device_key_created: "சாதன சாவி உருவாக்கப்பட்டது",
-    hardware_endpoint: "வன்பொருள் முனை (Hardware endpoint)",
+    hardware_endpoint: "Supabase PostgREST கிளவுட் முனை (Cloud Endpoint)",
+    hardware_405_title: "'HTTP 405 Not Allowed' பிழைக்கான தீர்வு",
+    hardware_405_desc:
+      "GitHub Pages ஒரு நிலையான (static) ஹோஸ்ட் என்பதால் HTTP POST கோரிக்கைகளை ஏற்காது (405 பிழை தரும்). ESP32 கையுறை வன்பொருள் நேரடியாக கீழே உள்ள 24/7 Supabase PostgREST கிளவுட் முனைக்கு அனுப்ப வேண்டும்.",
+    hardware_tab_arduino: "ESP32 Arduino C++ குறியீடு",
+    hardware_tab_sql: "Supabase SQL அமைப்பு",
+    hardware_tab_curl: "cURL சோதனை",
+    hardware_sql_hint:
+      "சாதன சைகைகளை ஏற்கவும் பராமரிப்பாளர்களுக்கு உடனடி எச்சரிக்கை விடுக்கவும் இந்த SQL-ஐ உங்கள் Supabase SQL Editor-ல் ஒருமுறை இயக்கவும்.",
+    hardware_sql_open: "Supabase SQL Editor-ஐத் திற",
+    hardware_copy_code: "குறியீட்டை நகலெடு",
+    hardware_copied: "கிளிப்போர்டில் நகலெடுக்கப்பட்டது!",
 
     // Lifecycle
     status_sent: "அனுப்பப்பட்டது",
