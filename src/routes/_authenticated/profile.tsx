@@ -10,6 +10,7 @@ import {
   Database,
   ExternalLink,
   Globe,
+  Hand,
   Loader2,
   Plus,
   Sliders,
@@ -141,8 +142,9 @@ GRANT EXECUTE ON FUNCTION public.submit_device_gesture(jsonb) TO anon, authentic
 
 function getArduinoCode(rpcUrl: string, anonKey: string, deviceKey: string) {
   return `/*
- * VoxSign ESP32 Flex Glove Firmware
- * Connects directly to Supabase Cloud PostgREST RPC (Fixes HTTP 405)
+ * VoxSign ESP32 Flex Glove Firmware (Zero Calibration)
+ * Auto-captures resting hand position on startup.
+ * No manual threshold numbers or calibration needed!
  */
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -163,12 +165,34 @@ const int PIN_FLEX_MIDDLE = 35; // Flex 3 (GPIO 35)
 const int PIN_FLEX_RING   = 32;
 const int PIN_FLEX_PINKY  = 33;
 
-const int THRESHOLD_BENT = 1800;
+// Auto-Baseline: measured automatically at startup
+int baseThumb = 0, baseIndex = 0, baseMiddle = 0, baseRing = 0, basePinky = 0;
+const int BEND_DELTA = 350; // Change required to register a bend
 unsigned long lastSend = 0;
 
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
+
+  // Auto-establish baseline resting values (~0.8s)
+  Serial.println("[Auto-Baseline] Measuring resting hand position...");
+  long sumThumb = 0, sumIndex = 0, sumMiddle = 0, sumRing = 0, sumPinky = 0;
+  for (int i = 0; i < 15; i++) {
+    sumThumb  += analogRead(PIN_FLEX_THUMB);
+    sumIndex  += analogRead(PIN_FLEX_INDEX);
+    sumMiddle += analogRead(PIN_FLEX_MIDDLE);
+    sumRing   += analogRead(PIN_FLEX_RING);
+    sumPinky  += analogRead(PIN_FLEX_PINKY);
+    delay(50);
+  }
+  baseThumb  = sumThumb / 15;
+  baseIndex  = sumIndex / 15;
+  baseMiddle = sumMiddle / 15;
+  baseRing   = sumRing / 15;
+  basePinky  = sumPinky / 15;
+
+  Serial.printf("[Auto-Baseline] Resting Base: Flex2(34)=%d | Flex3(35)=%d\\n", baseIndex, baseMiddle);
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
@@ -182,16 +206,22 @@ void loop() {
   int f4 = analogRead(PIN_FLEX_RING);
   int f5 = analogRead(PIN_FLEX_PINKY);
 
-  Serial.printf("Flex 2 (GPIO 34): %d | Flex 3 (GPIO 35): %d\\n", f2, f3);
+  // Dynamic bend detection relative to resting position (No manual calibration!)
+  bool f2_bent = abs(f2 - baseIndex)  > BEND_DELTA;
+  bool f3_bent = abs(f3 - baseMiddle) > BEND_DELTA;
+
+  Serial.printf("Flex 2 (GPIO 34): %4d (Δ%3d%s) | Flex 3 (GPIO 35): %4d (Δ%3d%s)\\n",
+                f2, abs(f2 - baseIndex), f2_bent ? " BENT" : "     ",
+                f3, abs(f3 - baseMiddle), f3_bent ? " BENT" : "     ");
 
   String code = "";
   String msg = "";
-  if (f2 > THRESHOLD_BENT && f3 > THRESHOLD_BENT) {
-    code = "HELP"; msg = "I NEED HELP";
-  } else if (f3 > THRESHOLD_BENT) {
-    code = "WATER"; msg = "I NEED WATER";
-  } else if (f2 > THRESHOLD_BENT) {
-    code = "MEDICINE"; msg = "I NEED MEDICINE";
+  if (f2_bent && f3_bent) {
+    code = "HELP"; msg = "எனக்கு உதவி தேவை (I NEED HELP)";
+  } else if (f3_bent && !f2_bent) {
+    code = "WATER"; msg = "தண்ணீர் வேண்டும் (I NEED WATER)";
+  } else if (f2_bent && !f3_bent) {
+    code = "MEDICINE"; msg = "மருந்து தேவை (I NEED MEDICINE)";
   }
 
   if (code.length() > 0 && millis() - lastSend > 3000) {
@@ -391,8 +421,8 @@ function ProfileBody({ profile }: { profile: Profile }) {
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild size="sm" variant="outline">
               <Link to="/gestures">
-                <Sliders className="h-4 w-4 mr-1.5 text-primary" />
-                {language === "ta" ? "சைகை அளவீடு (Calibration)" : "Gesture Calibration"}
+                <Hand className="h-4 w-4 mr-1.5 text-primary" />
+                {language === "ta" ? "சைகைகள் (Gestures)" : "View Gestures"}
               </Link>
             </Button>
             <Button size="sm" onClick={() => addDevice.mutate()} disabled={addDevice.isPending}>
@@ -499,8 +529,8 @@ function ProfileBody({ profile }: { profile: Profile }) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   {language === "ta"
-                    ? "GPIO 34 & 35 பின்களுடன் உங்கள் ESP32-ல் நேரடியாக பதிவேற்றக்கூடிய முழுமையான குறியீடு:"
-                    : "Ready-to-flash C++ sketch for ESP32 with your GPIO 34 & 35 flex sensor pins:"}
+                    ? "அளவீடு தேவையில்லாத (Zero-calibration) ESP32 குறியீடு (இயற்கையான விரல் நிலையைத் தொடக்கத்தில் தானாகவே அமைக்கும்):"
+                    : "Zero-calibration C++ sketch for ESP32 (Auto-measures resting baseline at boot, no manual calibration needed):"}
                 </p>
                 <Button
                   size="sm"
