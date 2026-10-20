@@ -13,7 +13,6 @@ import {
   Hand,
   Loader2,
   Plus,
-  Sliders,
   Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
