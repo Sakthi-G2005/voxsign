@@ -141,39 +141,100 @@ GRANT EXECUTE ON FUNCTION public.submit_device_gesture(jsonb) TO anon, authentic
 
 function getArduinoCode(rpcUrl: string, anonKey: string, deviceKey: string) {
   return `/*
- * VoxSign ESP32 Flex Glove Firmware (Zero Calibration)
- * Auto-captures resting hand position on startup.
- * No manual threshold numbers or calibration needed!
+ * =====================================================================
+ *  VoxSign ESP32 Smart Glove Firmware (Zero-Calibration & Zero-SQL)
+ *  
+ *  - ZERO MANUAL CALIBRATION:
+ *    Automatically measures and locks in your natural resting hand baseline
+ *    on boot (~0.8s). No manual threshold calibration or numbers needed!
+ *
+ *  - ZERO SQL SETUP:
+ *    Pre-configured with automated Supabase authentication.
+ *    No need to open Supabase SQL editor or create RPC functions manually.
+ *
+ *  - ZERO 405 ERRORS:
+ *    Sends 24/7 HTTPS REST requests directly to Supabase cloud,
+ *    bypassing static GitHub Pages restrictions completely.
+ *
+ *  - REALTIME CAREGIVER ALERTS:
+ *    Directly creates alerts in help_requests & gesture_events tables,
+ *    triggering instant sound & visual alerts on caregiver dashboards.
+ * =====================================================================
  */
+
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
+// =====================================================================
+// 1. WiFi Configuration (Update with your local Wi-Fi details)
+// =====================================================================
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
-// Supabase PostgREST Cloud Endpoint (24/7 HTTPS)
-const char* SUPABASE_RPC_URL  = "${rpcUrl}";
-const char* SUPABASE_ANON_KEY = "${anonKey}";
-const char* DEVICE_KEY        = "${deviceKey}";
+// =====================================================================
+// 2. Supabase Cloud Configuration (Pre-configured, Zero-SQL needed)
+// =====================================================================
+const char* SUPABASE_AUTH_URL   = "https://thpjccuzjyjtryvgcjmp.supabase.co/auth/v1/token?grant_type=password";
+const char* SUPABASE_HELP_URL   = "https://thpjccuzjyjtryvgcjmp.supabase.co/rest/v1/help_requests";
+const char* SUPABASE_EVENTS_URL = "https://thpjccuzjyjtryvgcjmp.supabase.co/rest/v1/gesture_events";
+const char* SUPABASE_ANON_KEY   = "sb_publishable_F9sfFPCQHDdSMa27udqxOw_8O0rv61E";
 
-// Flex Sensor Pins (ADC1)
-const int PIN_FLEX_THUMB  = 36;
+// Dedicated Hardware Sender Device Account (Automated Auth)
+const char* DEVICE_EMAIL        = "esp32_device@voxsign.local";
+const char* DEVICE_PASSWORD     = "DevicePassword123!";
+const char* SENDER_USER_ID      = "8ed0145d-c89c-4173-9170-d4fcd314c021";
+const char* DEVICE_ID           = "588a9b30-5759-49cb-9b05-acd34369f08d";
+
+// =====================================================================
+// 3. Flex Sensor Pins (ADC1 Pins - Safe with WiFi)
+// =====================================================================
+const int PIN_FLEX_THUMB  = 36; // Thumb  (GPIO 36 / VP)
 const int PIN_FLEX_INDEX  = 34; // Flex 2 (GPIO 34)
 const int PIN_FLEX_MIDDLE = 35; // Flex 3 (GPIO 35)
-const int PIN_FLEX_RING   = 32;
-const int PIN_FLEX_PINKY  = 33;
+const int PIN_FLEX_RING   = 32; // Flex 4 (GPIO 32)
+const int PIN_FLEX_PINKY  = 33; // Flex 5 (GPIO 33)
 
-// Auto-Baseline: measured automatically at startup
-int baseThumb = 0, baseIndex = 0, baseMiddle = 0, baseRing = 0, basePinky = 0;
-const int BEND_DELTA = 350; // Change required to register a bend
-unsigned long lastSend = 0;
+// =====================================================================
+// 4. Auto-Baseline Zero-Calibration Variables
+// =====================================================================
+int baseThumb  = 0;
+int baseIndex  = 0;
+int baseMiddle = 0;
+int baseRing   = 0;
+int basePinky  = 0;
 
+// Bend threshold delta relative to natural resting position
+const int BEND_DELTA = 350;
+
+// Debounce & Cooldown between alert triggers (3 seconds)
+unsigned long lastSendTime = 0;
+const unsigned long SEND_COOLDOWN_MS = 3000;
+
+// Token caching
+String authToken = "";
+unsigned long tokenTimestamp = 0;
+const unsigned long TOKEN_LIFETIME_MS = 1800000; // Refresh after 30 mins
+
+// Function declarations
+void connectWiFi();
+bool authenticateSupabase();
+void sendGestureToSupabase(String code, String message, int f1, int f2, int f3, int f4, int f5);
+
+// =====================================================================
+// 5. Setup Function
+// =====================================================================
 void setup() {
   Serial.begin(115200);
+  delay(1000);
+
+  Serial.println("\\n=======================================================");
+  Serial.println("  VoxSign ESP32 Smart Glove (Zero-Calibration & Zero-SQL) ");
+  Serial.println("=======================================================");
+
   analogReadResolution(12);
 
-  // Auto-establish baseline resting values (~0.8s)
+  // 1. Establish baseline resting positions automatically (~0.75s)
   Serial.println("[Auto-Baseline] Measuring resting hand position...");
   long sumThumb = 0, sumIndex = 0, sumMiddle = 0, sumRing = 0, sumPinky = 0;
   for (int i = 0; i < 15; i++) {
@@ -190,72 +251,217 @@ void setup() {
   baseRing   = sumRing / 15;
   basePinky  = sumPinky / 15;
 
-  Serial.printf("[Auto-Baseline] Resting Base: Flex2(34)=%d | Flex3(35)=%d\\n", baseIndex, baseMiddle);
+  Serial.printf("[Auto-Baseline] Resting Base: Flex2(34)=%d | Flex3(35)=%d | Thumb=%d\\n",
+                baseIndex, baseMiddle, baseThumb);
+  Serial.println("[Auto-Baseline] Ready! Zero calibration required.");
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  Serial.println("\\nWiFi connected! Ready to send gestures.");
+  // 2. Connect WiFi
+  connectWiFi();
+
+  // 3. Authenticate with Supabase Cloud
+  if (WiFi.status() == WL_CONNECTED) {
+    authenticateSupabase();
+  }
 }
 
+// =====================================================================
+// 6. Main Loop
+// =====================================================================
 void loop() {
-  int f1 = analogRead(PIN_FLEX_THUMB);
-  int f2 = analogRead(PIN_FLEX_INDEX);  // GPIO 34
-  int f3 = analogRead(PIN_FLEX_MIDDLE); // GPIO 35
-  int f4 = analogRead(PIN_FLEX_RING);
-  int f5 = analogRead(PIN_FLEX_PINKY);
-
-  // Dynamic bend detection relative to resting position (No manual calibration!)
-  bool f2_bent = abs(f2 - baseIndex)  > BEND_DELTA;
-  bool f3_bent = abs(f3 - baseMiddle) > BEND_DELTA;
-
-  Serial.printf("Flex 2 (GPIO 34): %4d (Δ%3d%s) | Flex 3 (GPIO 35): %4d (Δ%3d%s)\\n",
-                f2, abs(f2 - baseIndex), f2_bent ? " BENT" : "     ",
-                f3, abs(f3 - baseMiddle), f3_bent ? " BENT" : "     ");
-
-  String code = "";
-  String msg = "";
-  if (f2_bent && f3_bent) {
-    code = "HELP"; msg = "எனக்கு உதவி தேவை (I NEED HELP)";
-  } else if (f3_bent && !f2_bent) {
-    code = "WATER"; msg = "தண்ணீர் வேண்டும் (I NEED WATER)";
-  } else if (f2_bent && !f3_bent) {
-    code = "MEDICINE"; msg = "மருந்து தேவை (I NEED MEDICINE)";
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWiFi();
   }
 
-  if (code.length() > 0 && millis() - lastSend > 3000) {
-    sendGesture(code, msg, f1, f2, f3, f4, f5);
-    lastSend = millis();
+  // Refresh auth token periodically
+  if (authToken.length() == 0 || (millis() - tokenTimestamp > TOKEN_LIFETIME_MS)) {
+    authenticateSupabase();
   }
+
+  // Read live sensor values
+  int valThumb  = analogRead(PIN_FLEX_THUMB);
+  int valIndex  = analogRead(PIN_FLEX_INDEX);   // GPIO 34
+  int valMiddle = analogRead(PIN_FLEX_MIDDLE);  // GPIO 35
+  int valRing   = analogRead(PIN_FLEX_RING);
+  int valPinky  = analogRead(PIN_FLEX_PINKY);
+
+  // Dynamic bend detection: checks relative change from resting baseline
+  bool indexBent  = abs(valIndex  - baseIndex)  > BEND_DELTA;
+  bool middleBent = abs(valMiddle - baseMiddle) > BEND_DELTA;
+  bool thumbBent  = abs(valThumb  - baseThumb)  > BEND_DELTA;
+
+  Serial.printf("Flex2(34): %4d (Δ%3d%s) | Flex3(35): %4d (Δ%3d%s)\\n",
+                valIndex, abs(valIndex - baseIndex), indexBent ? " BENT" : "     ",
+                valMiddle, abs(valMiddle - baseMiddle), middleBent ? " BENT" : "     ");
+
+  String gestureCode = "";
+  String gestureMsg  = "";
+
+  // Gesture mapping:
+  if (indexBent && middleBent) {
+    gestureCode = "HELP";
+    gestureMsg  = "எனக்கு உதவி தேவை (I NEED HELP)";
+  } else if (middleBent && !indexBent) {
+    gestureCode = "WATER";
+    gestureMsg  = "தண்ணீர் வேண்டும் (I NEED WATER)";
+  } else if (indexBent && !middleBent) {
+    gestureCode = "MEDICINE";
+    gestureMsg  = "மருந்து தேவை (I NEED MEDICINE)";
+  }
+
+  // Send alert if gesture detected and cooldown has elapsed
+  if (gestureCode.length() > 0 && (millis() - lastSendTime > SEND_COOLDOWN_MS)) {
+    Serial.printf("\\n>>> [ALERT TRIGGERED] Code: %s | Msg: %s\\n", gestureCode.c_str(), gestureMsg.c_str());
+    sendGestureToSupabase(gestureCode, gestureMsg, valThumb, valIndex, valMiddle, valRing, valPinky);
+    lastSendTime = millis();
+  }
+
   delay(300);
 }
 
-void sendGesture(String code, String msg, int f1, int f2, int f3, int f4, int f5) {
-  WiFiClientSecure client;
-  client.setInsecure(); // Bypass cert verification
-  HTTPClient http;
-  if (!http.begin(client, SUPABASE_RPC_URL)) return;
+// =====================================================================
+// 7. WiFi Connection Helper
+// =====================================================================
+void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
 
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  String body = "{\\"device_key\\":\\"" + String(DEVICE_KEY) +
-                "\\",\\"gesture_code\\":\\"" + code +
-                "\\",\\"gesture_message\\":\\"" + msg +
-                "\\",\\"sensor_data\\":{\\"flex1\\":" + String(f1) +
-                ",\\"flex2\\":" + String(f2) +
-                ",\\"flex3\\":" + String(f3) +
-                ",\\"flex4\\":" + String(f4) +
-                ",\\"flex5\\":" + String(f5) + "}}";
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
 
-  int code_resp = http.POST(body);
-  Serial.printf("HTTP Response: %d\\n", code_resp);
-  if (code_resp > 0) Serial.println(http.getString());
-  http.end();
-}`;
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\\n[WiFi] Connected successfully!");
+    Serial.print("[WiFi] IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\\n[WiFi] Connection failed. Retrying in background...");
+  }
 }
 
+// =====================================================================
+// 8. Automated Supabase Authentication (No manual SQL needed)
+// =====================================================================
+bool authenticateSupabase() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  Serial.println("[Auth] Authenticating device with Supabase Cloud...");
+  WiFiClientSecure client;
+  client.setInsecure(); // Bypass SSL cert validation on ESP32
+
+  HTTPClient https;
+  if (!https.begin(client, SUPABASE_AUTH_URL)) {
+    Serial.println("[Auth] Failed to initialize HTTPS client");
+    return false;
+  }
+
+  https.addHeader("Content-Type", "application/json");
+  https.addHeader("apikey", SUPABASE_ANON_KEY);
+
+  String payload = "{\\"email\\":\\"" + String(DEVICE_EMAIL) + "\\",\\"password\\":\\"" + String(DEVICE_PASSWORD) + "\\"}";
+  int code = https.POST(payload);
+
+  if (code == 200) {
+    String resp = https.getString();
+    int tokenKeyIdx = resp.indexOf("\\"access_token\\":\\"");
+    if (tokenKeyIdx != -1) {
+      int startIdx = tokenKeyIdx + 16;
+      int endIdx = resp.indexOf("\\"", startIdx);
+      if (endIdx != -1) {
+        authToken = resp.substring(startIdx, endIdx);
+        tokenTimestamp = millis();
+        Serial.println("[Auth] Authentication successful! Hardware token secured.");
+        https.end();
+        return true;
+      }
+    }
+  }
+
+  Serial.printf("[Auth] Failed to authenticate. HTTP Code: %d\\n", code);
+  https.end();
+  return false;
+}
+
+// =====================================================================
+// 9. Send Gesture Alert directly to Supabase REST API (No 405 Error)
+// =====================================================================
+void sendGestureToSupabase(String code, String message, int f1, int f2, int f3, int f4, int f5) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[HTTP] WiFi not connected. Cannot send alert.");
+    return;
+  }
+
+  // Ensure valid token
+  if (authToken.length() == 0) {
+    if (!authenticateSupabase()) {
+      Serial.println("[HTTP] Could not authenticate. Aborting alert.");
+      return;
+    }
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  // Step 1: Insert into public.help_requests (Triggers Caregiver Realtime Dashboards)
+  HTTPClient https;
+  if (https.begin(client, SUPABASE_HELP_URL)) {
+    https.addHeader("Content-Type", "application/json");
+    https.addHeader("apikey", SUPABASE_ANON_KEY);
+    https.addHeader("Authorization", "Bearer " + authToken);
+    https.addHeader("Prefer", "return=minimal");
+
+    String helpPayload = "{\\"sender_id\\":\\"" + String(SENDER_USER_ID) +
+                         "\\",\\"gesture_code\\":\\"" + code +
+                         "\\",\\"message\\":\\"" + message +
+                         "\\",\\"status\\":\\"sent\\",\\"source\\":\\"device\\"}";
+
+    Serial.println("[HTTP] Dispatching alert to help_requests...");
+    int httpCode = https.POST(helpPayload);
+
+    if (httpCode == 200 || httpCode == 201) {
+      Serial.printf("[SUCCESS] Caregiver Alert Created! HTTP %d (Broadcasted via Supabase Realtime!)\\n", httpCode);
+    } else if (httpCode == 401 || httpCode == 403) {
+      Serial.println("[Auth] Token expired. Re-authenticating...");
+      authToken = "";
+      authenticateSupabase();
+    } else {
+      Serial.printf("[WARN] help_requests responded with HTTP %d\\n", httpCode);
+    }
+    https.end();
+  }
+
+  // Step 2: Insert into public.gesture_events (Hardware sensor telemetry log)
+  if (https.begin(client, SUPABASE_EVENTS_URL)) {
+    https.addHeader("Content-Type", "application/json");
+    https.addHeader("apikey", SUPABASE_ANON_KEY);
+    https.addHeader("Authorization", "Bearer " + authToken);
+    https.addHeader("Prefer", "return=minimal");
+
+    String eventPayload = "{\\"user_id\\":\\"" + String(SENDER_USER_ID) +
+                          "\\",\\"device_id\\":\\"" + String(DEVICE_ID) +
+                          "\\",\\"gesture_code\\":\\"" + code +
+                          "\\",\\"gesture_message\\":\\"" + message +
+                          "\\",\\"sensor_data\\":{\\"flex1\\":" + String(f1) +
+                          ",\\"flex2\\":" + String(f2) +
+                          ",\\"flex3\\":" + String(f3) +
+                          ",\\"flex4\\":" + String(f4) +
+                          ",\\"flex5\\":" + String(f5) + "}," +
+                          "\\"source\\":\\"device\\"}";
+
+    int eventCode = https.POST(eventPayload);
+    if (eventCode == 200 || eventCode == 201) {
+      Serial.printf("[SUCCESS] Sensor Telemetry Saved! HTTP %d\\n", eventCode);
+    }
+    https.end();
+  }
+}
+`;
+}
 function ProfileBody({ profile }: { profile: Profile }) {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
