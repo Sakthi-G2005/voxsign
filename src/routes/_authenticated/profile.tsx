@@ -2,9 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   Check,
-  CheckCircle2,
   Code2,
   Copy,
   Cpu,
@@ -669,20 +667,6 @@ function ProfileBody({ profile }: { profile: Profile }) {
           <p className="mt-4 text-sm text-muted-foreground">{t("no_devices")}</p>
         )}
 
-        {/* Direct Cloud Connection Status (HTTP 405 Solved) */}
-        <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-200">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-emerald-300">
-                {t("hardware_405_title")}
-              </p>
-              <p className="text-xs text-emerald-200/90 leading-relaxed">
-                {t("hardware_405_desc")}
-              </p>
-            </div>
-          </div>
-        </div>
 
         {/* Live Supabase Endpoint Card */}
         <div className="mt-4 rounded-xl border border-border bg-card p-4 space-y-3">
