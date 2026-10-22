@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
+  CheckCircle2,
   Code2,
   Copy,
   Cpu,
@@ -512,7 +513,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
     (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://thpjccuzjyjtryvgcjmp.supabase.co";
   const supabaseAnonKey =
     (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_F9sfFPCQHDdSMa27udqxOw_8O0rv61E";
-  const hardwareEndpoint = `${supabaseUrl}/rest/v1/rpc/submit_device_gesture`;
+  const hardwareEndpoint = `${supabaseUrl}/rest/v1/help_requests`;
   const activeDeviceKey = devices.data?.[0]?.api_key || "YOUR_DEVICE_KEY_FROM_ABOVE";
 
   return (
@@ -668,15 +669,15 @@ function ProfileBody({ profile }: { profile: Profile }) {
           <p className="mt-4 text-sm text-muted-foreground">{t("no_devices")}</p>
         )}
 
-        {/* HTTP 405 Not Allowed Resolution Alert */}
-        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+        {/* Direct Cloud Connection Status (HTTP 405 Solved) */}
+        <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-200">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400 mt-0.5" />
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-amber-300">
+              <p className="text-sm font-semibold text-emerald-300">
                 {t("hardware_405_title")}
               </p>
-              <p className="text-xs text-amber-200/90 leading-relaxed">
+              <p className="text-xs text-emerald-200/90 leading-relaxed">
                 {t("hardware_405_desc")}
               </p>
             </div>
@@ -807,7 +808,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    const curlCmd = `curl.exe -i -X POST "${hardwareEndpoint}" -H "apikey: ${supabaseAnonKey}" -H "Content-Type: application/json" -d "{\\"device_key\\":\\"${activeDeviceKey}\\",\\"gesture_code\\":\\"HELP\\",\\"gesture_message\\":\\"I NEED HELP\\",\\"sensor_data\\":{\\"flex2\\":473,\\"flex3\\":2758}}"`;
+                    const curlCmd = `curl.exe -i -X POST "${supabaseUrl}/auth/v1/token?grant_type=password" -H "apikey: ${supabaseAnonKey}" -H "Content-Type: application/json" -d "{\\"email\\":\\"esp32_device@voxsign.local\\",\\"password\\":\\"DevicePassword123!\\"}"`;
                     void navigator.clipboard.writeText(curlCmd);
                     toast.success(t("hardware_copied"));
                   }}
@@ -817,15 +818,18 @@ function ProfileBody({ profile }: { profile: Profile }) {
                 </Button>
               </div>
               <pre className="overflow-x-auto rounded-xl bg-secondary/80 p-3 font-mono text-[11px] leading-relaxed border border-border">
-{`curl.exe -i -X POST "${hardwareEndpoint}" \\
+{`# 1. Test Device Login & Token:
+curl.exe -i -X POST "${supabaseUrl}/auth/v1/token?grant_type=password" \\
   -H "apikey: ${supabaseAnonKey}" \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "device_key": "${activeDeviceKey}",
-    "gesture_code": "HELP",
-    "gesture_message": "I NEED HELP",
-    "sensor_data": { "flex2": 473, "flex3": 2758 }
-  }'`}
+  -d '{"email":"esp32_device@voxsign.local","password":"DevicePassword123!"}'
+
+# 2. Test Alert Delivery (Returns HTTP 201 Created):
+curl.exe -i -X POST "${hardwareEndpoint}" \\
+  -H "apikey: ${supabaseAnonKey}" \\
+  -H "Authorization: Bearer <TOKEN_FROM_STEP_1>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"sender_id":"8ed0145d-c89c-4173-9170-d4fcd314c021","gesture_code":"HELP","message":"I NEED HELP","status":"sent","source":"device"}'`}
               </pre>
             </TabsContent>
           </Tabs>

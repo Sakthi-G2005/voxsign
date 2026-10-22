@@ -41,9 +41,9 @@ export const translations = {
     device_key_copied: "Device key copied",
     device_key_created: "Device key created",
     hardware_endpoint: "Supabase PostgREST Cloud Endpoint",
-    hardware_405_title: "Fix for 'HTTP 405 Not Allowed' Error",
+    hardware_405_title: "Direct Cloud Connection (HTTP 405 Solved)",
     hardware_405_desc:
-      "GitHub Pages is a static host that blocks all HTTP POST requests with 405. VoxSign hardware devices send POST requests directly to the 24/7 Supabase PostgREST endpoint below.",
+      "GitHub Pages is a static host that blocks HTTP POST requests with 405. VoxSign hardware connects directly to the 24/7 Supabase Cloud REST endpoint below with automated device authentication. No manual SQL or setup required!",
     hardware_tab_arduino: "ESP32 Arduino C++ Code",
     hardware_tab_sql: "1-Click Supabase SQL Setup",
     hardware_tab_curl: "cURL / Postman Test",
@@ -238,9 +238,9 @@ export const translations = {
     device_key_copied: "சாதன சாவி நகலெடுக்கப்பட்டது",
     device_key_created: "சாதன சாவி உருவாக்கப்பட்டது",
     hardware_endpoint: "Supabase PostgREST கிளவுட் முனை (Cloud Endpoint)",
-    hardware_405_title: "'HTTP 405 Not Allowed' பிழைக்கான தீர்வு",
+    hardware_405_title: "நேரடி கிளவுட் இணைப்பு ('HTTP 405' பிழை தீர்க்கப்பட்டது)",
     hardware_405_desc:
-      "GitHub Pages ஒரு நிலையான (static) ஹோஸ்ட் என்பதால் HTTP POST கோரிக்கைகளை ஏற்காது (405 பிழை தரும்). ESP32 கையுறை வன்பொருள் நேரடியாக கீழே உள்ள 24/7 Supabase PostgREST கிளவுட் முனைக்கு அனுப்ப வேண்டும்.",
+      "GitHub Pages ஒரு நிலையான (static) தளம் என்பதால் POST கோரிக்கைகளை ஏற்காது (405). VoxSign வன்பொருள் நேரடியாக கீழே உள்ள 24/7 Supabase கிளவுட் முனைக்கு தானியங்கி அங்கீகாரத்துடன் எச்சரிக்கைகளை அனுப்புகிறது. மேனுவல் SQL எதுவும் தேவையில்லை!",
     hardware_tab_arduino: "ESP32 Arduino C++ குறியீடு",
     hardware_tab_sql: "Supabase SQL அமைப்பு",
     hardware_tab_curl: "cURL சோதனை",
